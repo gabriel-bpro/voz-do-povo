@@ -49,4 +49,6 @@ _Decided 2026-08-28 (grilling session, 3 rounds)._
 
 ## Comments
 
+_Amendment 2026-09-03:_ backend language switched from Nest (TypeScript) to **Go** — the worker and API are Go services. Everything else in the answer stands (Postgres only, raw+curated layers, cadences, identity linkage); `@google-cloud/bigquery` becomes the Go BigQuery client (`cloud.google.com/go/bigquery`), still authenticated via `GCP_SERVICE_ACCOUNT_JSON`.
+
 _Amendment 2026-09-02 (pivot in [ticket 05](05-llm-strategy.md)):_ the "NL-query engine interface: LLM-generated SQL with strict validation" decision above is **moot** — free-form NL querying left the MVP. Everything else stands: the app queries curated tables on demand, and the LLM never touches the store directly (walkthroughs are precomputed post-sync from the curated layer).
