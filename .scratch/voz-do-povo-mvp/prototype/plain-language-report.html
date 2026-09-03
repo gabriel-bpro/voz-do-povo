@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PROTÓTIPO — Voz do Povo — relatório em linguagem simples</title>
+<!--
+  PROTÓTIPO DESCARTÁVEL — ticket 06 (Prototype a plain-language report)
+  Pergunta: como um relatório em linguagem simples parece e se lê?
+  3 variantes do perfil do parlamentar + seção de rankings da home, alternáveis na barra inferior.
+  Dados FICTÍCIOS no formato real das fontes (CEAP/Câmara, CEAPS/Senado, TSE via Base dos Dados, Portal da Transparência).
+-->
+<style>
+  :root {
+    --ink: #1a2332;
+    --muted: #5b6779;
+    --line: #dde3ec;
+    --accent: #006b3f;
+    --accent-soft: #e6f4ec;
+    --warn: #b3261e;
+    --warn-soft: #fdeceb;
+    --bg: #f7f8fa;
+    --card: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 16px; line-height: 1.55;
+  }
+  a { color: var(--accent); }
+
+  /* ---------- chrome do protótipo (não faz parte do design) ---------- */
+  .proto-banner {
+    background: #1a2332; color: #fff; padding: 8px 16px; font-size: 13px;
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  }
+  .proto-banner strong { color: #ffd966; }
+  .proto-tabs { display: flex; gap: 4px; }
+  .proto-tabs button {
+    background: #2c3a4f; color: #cbd5e1; border: 0; border-radius: 6px;
+    padding: 4px 14px; cursor: pointer; font-size: 13px;
+  }
+  .proto-tabs button.active { background: #fff; color: #1a2332; font-weight: 600; }
+  .switcher {
+    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+    background: #1a2332; color: #fff; border-radius: 999px; padding: 8px 10px;
+    display: flex; gap: 10px; align-items: center; box-shadow: 0 6px 24px rgba(0,0,0,.35);
+    z-index: 99; font-size: 14px;
+  }
+  .switcher button {
+    background: #fff; color: #1a2332; border: 0; border-radius: 50%;
+    width: 32px; height: 32px; font-size: 16px; cursor: pointer;
+  }
+  .switcher .label { min-width: 220px; text-align: center; }
+
+  /* ---------- componentes compartilhados ---------- */
+  .badge-atencao {
+    display: inline-block; background: var(--warn-soft); color: var(--warn);
+    border: 1px solid #f2b8b3; border-radius: 4px; padding: 1px 8px;
+    font-size: 12.5px; font-weight: 600; white-space: nowrap;
+  }
+  .badge-pix {
+    display: inline-block; background: #fff3cd; color: #8a6d00;
+    border: 1px solid #ecd47a; border-radius: 4px; padding: 1px 8px;
+    font-size: 12.5px; font-weight: 600; white-space: nowrap;
+  }
+  .fonte { font-size: 12px; color: var(--muted); }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); font-size: 14.5px; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .bar { height: 8px; background: var(--accent); border-radius: 4px; min-width: 2px; }
+  .bar.warn { background: var(--warn); }
+</style>
+</head>
+<body>
+
+<div class="proto-banner">
+  <strong>PROTÓTIPO</strong>
+  <span>ticket 06 — linguagem simples · dados fictícios no formato real · conteúdo em pt-BR</span>
+  <div class="proto-tabs">
+    <button id="tab-home" onclick="setTab('home')">Início (rankings)</button>
+    <button id="tab-perfil" onclick="setTab('perfil')">Perfil do parlamentar</button>
+  </div>
+</div>
+
+<main id="root"></main>
+
+<div class="switcher">
+  <button onclick="cycle(-1)" aria-label="variante anterior">←</button>
+  <span class="label" id="switcher-label"></span>
+  <button onclick="cycle(1)" aria-label="próxima variante">→</button>
+</div>
+
+<script>
+/* ================= DADOS FICTÍCIOS (formato real) ================= */
+const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+const BRL2 = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+const NUM = new Intl.NumberFormat('pt-BR');
+
+const politico = {
+  nome: 'Marina Duarte Ribeiro',
+  nomeUrna: 'Marina Ribeiro',
+  partido: 'PARTE', uf: 'SP', cargo: 'Deputada federal', casa: 'camara',
+  mandato: '1º mandato (2023–hoje)',
+  presenca: { taxa: 96.2, sessoes: 132, presentes: 127 },
+  resumoTemplate:
+    '{nome} é deputada federal por {uf} ({partido}), em seu {mandato}. ' +
+    'Em 2026, gastou {gastoAno} da cota parlamentar — valor dentro da faixa típica de deputados de {uf} ' +
+    '(mediana: {medianaUf}). Compareceu a {presenca}% das sessões votadas nesta legislatura. ' +
+    'Declarou ao TSE patrimônio de {patrimonio} em 2026, {variacaoPatrimonio} em relação a 2018.',
+  gastos: {
+    ano: 2026, totalAno: 412350, medianaUf: 388000, salariosMinimos: 268,
+    mensal: [
+      { mes: 'jan', v: 31800 }, { mes: 'fev', v: 29400 }, { mes: 'mar', v: 36200 },
+      { mes: 'abr', v: 34100 }, { mes: 'mai', v: 38900 }, { mes: 'jun', v: 35600 },
+      { mes: 'jul', v: 41000 }, { mes: 'ago', v: 44350 },
+    ],
+    maiores: [
+      { data: '12/08/2026', tipo: 'Divulgação da atividade parlamentar', fornecedor: 'Gráfica Horizonte Ltda', valor: 28400, atencao: '4,2× a mediana da categoria' },
+      { data: '03/07/2026', tipo: 'Locação de imóvel (escritório)', fornecedor: 'Imobiliária Central SP', valor: 9800, atencao: null },
+      { data: '21/06/2026', tipo: 'Passagens aéreas', fornecedor: 'Companhia aérea (bilhetes)', valor: 7320, atencao: null },
+      { data: '15/05/2026', tipo: 'Consultoria de comunicação', fornecedor: 'Comunicar Assessoria', valor: 6900, atencao: 'fornecedor consta no CEIS (sanções CGU)' },
+      { data: '28/04/2026', tipo: 'Combustíveis e lubrificantes', fornecedor: 'Posto Estrela do Vale', valor: 4180, atencao: null },
+    ],
+  },
+  emendas: {
+    explicacao:
+      'Emenda parlamentar é dinheiro do orçamento federal que o parlamentar direciona para uma cidade, estado ou entidade. ' +
+      'Empenhado é o valor reservado; pago é o que efetivamente saiu do cofre. A diferença importa: emenda empenhada e não paga pode indicar obra parada ou destino travado.',
+    pixExplicacao:
+      'Emenda PIX (transferência especial) vai direto para o fundo da prefeitura ou do estado, sem objeto específico. É o tipo de emenda mais difícil de rastrear.',
+    porAno: [
+      { ano: 2024, empenhado: 4200000, pago: 2600000 },
+      { ano: 2025, empenhado: 6800000, pago: 5100000 },
+      { ano: 2026, empenhado: 9100000, pago: 3400000 },
+    ],
+    maiores: [
+      { ano: 2026, destino: 'Prefeitura de Campinas/SP', area: 'Saúde', valor: 1800000, pix: false, atencao: null },
+      { ano: 2026, destino: 'Fundo municipal de Taubaté/SP', area: '— (sem objeto)', valor: 1500000, pix: true, atencao: 'emenda PIX: destino pouco rastreável' },
+      { ano: 2025, destino: 'Prefeitura de São José dos Campos/SP', area: 'Infraestrutura', valor: 1200000, pix: false, atencao: null },
+      { ano: 2025, destino: 'Santa Casa de Mogi das Cruzes', area: 'Saúde', valor: 900000, pix: false, atencao: null },
+      { ano: 2026, destino: 'Fundo estadual de São Paulo', area: '— (sem objeto)', valor: 850000, pix: true, atencao: null },
+    ],
+  },
+  votos: [
+    { data: '26/08/2026', tema: 'PL 1234/2026 — Isenção de ICMS para energia solar', voto: 'Sim', partido: 'Sim', concordou: true },
+    { data: '19/08/2026', tema: 'PEC 45/2023 — Reforma tributária (2º turno)', voto: 'Não', partido: 'Não', concordou: true },
+    { data: '12/08/2026', tema: 'PL 987/2024 — Marco legal das ferrovias', voto: 'Sim', partido: 'Não', concordou: false },
+    { data: '05/08/2026', tema: 'Requerimento de urgência — PL 2200/2025', voto: 'Sim', partido: 'Sim', concordou: true },
+    { data: '29/07/2026', tema: 'PL 3110/2024 — Programa nacional de merenda', voto: 'Sim', partido: 'Sim', concordou: true },
+  ],
+  patrimonio: {
+    total2026: 1870000,
+    evolucao: [
+      { ano: 2014, valor: 620000 }, { ano: 2018, valor: 890000 },
+      { ano: 2022, valor: 1340000 }, { ano: 2026, valor: 1870000 },
+    ],
+    variacao: '+110%',
+  },
+  financiamento: {
+    ciclo: 2026, totalArrecadado: 2150000,
+    doadores: [
+      { nome: 'Direção nacional do partido (fundo partidário)', valor: 800000 },
+      { nome: 'Construtora Alicerce S.A.', valor: 300000 },
+      { nome: 'Fundo especial de financiamento de campanha (FEFC)', valor: 250000 },
+      { nome: 'José Almeida Prado (pessoa física)', valor: 120000 },
+      { nome: 'Cooperativa AgroVale', valor: 95000 },
+    ],
+  },
+};
+
+const rankings = [
+  {
+    titulo: 'Maiores gastos da cota em 2026',
+    subtitulo: 'Câmara dos Deputados · sincronizado hoje',
+    linhas: [
+      { nome: 'Carlos Meireles (PARTB–RJ)', valor: 612400, atencao: true },
+      { nome: 'Ana Paula Souto (PARTC–MG)', valor: 588100, atencao: false },
+      { nome: 'Roberto Cavalcane (PARTB–BA)', valor: 551900, atencao: false },
+      { nome: 'Luiza Fontoura (PARTD–RS)', valor: 540200, atencao: false },
+      { nome: 'Marina Duarte Ribeiro (PARTE–SP)', valor: 412350, atencao: false },
+    ],
+  },
+  {
+    titulo: 'Maiores emendas PIX de 2026',
+    subtitulo: 'As emendas mais difíceis de rastrear · Portal da Transparência · semanal',
+    linhas: [
+      { nome: 'Sen. Otávio Bragança (PARTC–PA)', valor: 18200000, atencao: true },
+      { nome: 'Dep. Nivaldo Serpa (PARTB–MA)', valor: 12400000, atencao: true },
+      { nome: 'Dep. Teresa Vale (PARTD–GO)', valor: 9800000, atencao: false },
+      { nome: 'Sen. Cássia Montenegro (PARTE–CE)', valor: 7600000, atencao: false },
+      { nome: 'Dep. Ivo Laranjeira (PARTB–PE)', valor: 7100000, atencao: false },
+    ],
+  },
+  {
+    titulo: 'Menor presença em sessões (legislatura atual)',
+    subtitulo: 'Câmara dos Deputados · diário',
+    linhas: [
+      { nome: 'Dep. Arnaldo Figueira (PARTB–AM)', valor: 41, fmt: v => v + '%', atencao: true },
+      { nome: 'Dep. Selma Rocha (PARTC–AC)', valor: 47, fmt: v => v + '%', atencao: true },
+      { nome: 'Dep. Hugo Prestes (PARTD–SC)', valor: 52, fmt: v => v + '%', atencao: false },
+      { nome: 'Dep. Vanda Lins (PARTE–PI)', valor: 55, fmt: v => v + '%', atencao: false },
+      { nome: 'Dep. Érico Saldanha (PARTB–ES)', valor: 58, fmt: v => v + '%', atencao: false },
+    ],
+  },
+];
+
+const FONTES = {
+  gastos: 'Fonte: Câmara dos Deputados — CEAP · sincronizado diariamente (última: hoje, 06h)',
+  emendas: 'Fonte: Portal da Transparência (CGU) · sincronizado semanalmente',
+  votos: 'Fonte: Câmara dos Deputados — votações nominais · sincronizado diariamente',
+  patrimonio: 'Fonte: TSE, via Base dos Dados · declarações de bens por eleição · atualizado a cada ciclo eleitoral',
+  financiamento: 'Fonte: TSE, via Base dos Dados · prestação de contas · atualizado a cada ciclo eleitoral',
+};
+
+/* ================= helpers ================= */
+const fmt = BRL.format.bind(BRL);
+function pct(a, b) { return Math.round((a / b) * 100); }
+function explainer(t) { return `<p style="color:var(--muted);font-size:14px;background:var(--accent-soft);border-radius:8px;padding:10px 14px;">ℹ️ ${t}</p>`; }
+function badge(atencao) { return atencao ? `<span class="badge-atencao" title="Regra transparente e fixa — nada aqui é opinião">⚠ chama atenção: ${atencao}</span>` : ''; }
+
+function resumo() {
+  const p = politico;
+  return p.resumoTemplate
+    .replace('{nome}', p.nome).replace('{uf}', p.uf).replace('{partido}', p.partido)
+    .replace('{mandato}', p.mandato).replace('{gastoAno}', fmt(p.gastos.totalAno))
+    .replace('{medianaUf}', fmt(p.gastos.medianaUf)).replace('{presenca}', String(p.presenca.taxa).replace('.', ','))
+    .replace('{patrimonio}', fmt(p.patrimonio.total2026)).replace('{variacaoPatrimonio}', p.patrimonio.variacao.replace('+', 'alta de ').replace('-', 'queda de '));
+}
+
+function barRows(linhas, money = true) {
+  const max = Math.max(...linhas.map(l => l.valor));
+  return linhas.map(l => {
+    const label = (l.fmt ? l.fmt(l.valor) : fmt(l.valor));
+    return `<tr>
+      <td><a href="#">${l.nome}</a></td>
+      <td class="num" style="width:130px">${label}</td>
+      <td style="width:38%"><div class="bar ${l.atencao ? 'warn' : ''}" style="width:${pct(l.valor, max)}%"></div></td>
+    </tr>`;
+  }).join('');
+}
+
+/* ================= VARIANTE A — "Reportagem" =================
+   Lê como matéria explicativa: prosa templada primeiro, tabelas mínimas de apoio. */
+const VarianteA = {
+  nome: 'A — Reportagem',
+  home() {
+    return `<div style="max-width:720px;margin:32px auto;padding:0 20px 120px;">
+      <h1 style="font-size:30px;line-height:1.2;">Voz do Povo</h1>
+      <p style="font-size:17px;color:var(--muted);">O que os políticos que você elegeu fazem com dinheiro público — explicado em linguagem simples, com dados oficiais.</p>
+      ${rankings.map(r => `
+        <h2 style="font-size:21px;margin-top:44px;">${r.titulo}</h2>
+        <p class="fonte" style="margin-top:-8px;">${r.subtitulo}</p>
+        <ol style="padding-left:22px;">
+          ${r.linhas.map(l => `<li style="margin:8px 0;">
+            <a href="#">${l.nome}</a> — <strong>${l.fmt ? l.fmt(l.valor) : fmt(l.valor)}</strong>
+            ${l.atencao ? ' ' + badge(null).replace('>⚠ chama atenção: ', '>⚠ chama atenção') : ''}
+          </li>`).join('')}
+        </ol>`).join('')}
+    </div>`;
+  },
+  perfil() {
+    const p = politico;
+    return `<div style="max-width:720px;margin:32px auto;padding:0 20px 120px;">
+      <p style="color:var(--muted);margin-bottom:4px;">${p.cargo} · ${p.partido}–${p.uf} · ${p.mandato}</p>
+      <h1 style="font-size:32px;line-height:1.15;margin-top:0;">${p.nome}</h1>
+      <p style="font-size:19px;line-height:1.6;">${resumo()}</p>
+
+      <h2 style="margin-top:48px;">Gastos do mandato</h2>
+      <p>Em 2026, ${p.nomeUrna} gastou <strong>${fmt(p.gastos.totalAno)}</strong> da cota parlamentar — o dinheiro que cada deputado recebe para custear o trabalho do mandato (passagens, escritório, divulgação). Isso equivale a cerca de <strong>${p.gastos.salariosMinimos} salários mínimos</strong>, e está dentro da faixa típica de deputados de ${p.uf} (mediana: ${fmt(p.gastos.medianaUf)}).</p>
+      <p>Os maiores gastos individuais do ano foram:</p>
+      <ul>
+        ${p.gastos.maiores.map(g => `<li style="margin:10px 0;">
+          <strong>${fmt(g.valor)}</strong> em ${g.tipo.toLowerCase()} — ${g.fornecedor}, em ${g.data}. ${badge(g.atencao)}
+        </li>`).join('')}
+      </ul>
+      <p class="fonte">${FONTES.gastos}</p>
+
+      <h2 style="margin-top:48px;">Emendas parlamentares</h2>
+      ${explainer(p.emendas.explicacao)}
+      <p>Em 2026, ${p.nomeUrna} reservou <strong>${fmt(p.emendas.porAno[2].empenhado)}</strong> em emendas, dos quais <strong>${fmt(p.emendas.porAno[2].pago)}</strong> foram efetivamente pagos até agora (${pct(p.emendas.porAno[2].pago, p.emendas.porAno[2].empenhado)}%). Nos três anos de mandato, o ritmo de pagamento foi de ${pct(2600000+5100000+3400000, 4200000+6800000+9100000)}%.</p>
+      <p>A maior emenda de 2026 foi <strong>${fmt(p.emendas.maiores[0].valor)}</strong> para ${p.emendas.maiores[0].destino} (${p.emendas.maiores[0].area.toLowerCase()}). Duas das cinco maiores foram <span class="badge-pix">emenda PIX</span> — ${p.emendas.pixExplicacao}</p>
+      <p class="fonte">${FONTES.emendas}</p>
+
+      <h2 style="margin-top:48px;">Votos e presença</h2>
+      <p>${p.nomeUrna} compareceu a <strong>${String(p.presenca.taxa).replace('.', ',')}%</strong> das ${p.presenca.sessoes} sessões com votação desta legislatura. Nas últimas votações nominais, seguiu a orientação do partido em ${p.votos.filter(v => v.concordou).length} de ${p.votos.length}:</p>
+      <ul>
+        ${p.votos.map(v => `<li style="margin:10px 0;">${v.tema} — votou <strong>${v.voto}</strong>${v.concordou ? '' : `, <em>divergindo do partido</em> (que orientou ${v.partido})`}.</li>`).join('')}
+      </ul>
+      <p class="fonte">${FONTES.votos}</p>
+
+      <h2 style="margin-top:48px;">Patrimônio declarado</h2>
+      <p>Todo candidato declara seus bens ao TSE a cada eleição. ${p.nomeUrna} declarou <strong>${fmt(p.patrimonio.total2026)}</strong> em 2026. Em 2014, eram ${fmt(p.patrimonio.evolucao[0].valor)} — uma alta de ${p.patrimonio.variacao.replace('+','')} em 12 anos. O crescimento declarado foi de ${fmt(p.patrimonio.evolucao[2].valor)} para ${fmt(p.patrimonio.evolucao[3].valor)} só entre 2022 e 2026.</p>
+      <p class="fonte">${FONTES.patrimonio}</p>
+
+      <h2 style="margin-top:48px;">Financiamento de campanha</h2>
+      <p>Na campanha de 2026, a campanha de ${p.nomeUrna} arrecadou <strong>${fmt(p.financiamento.totalArrecadado)}</strong>. As maiores origens: ${p.financiamento.doadores.slice(0,3).map(d => `${d.nome} (${fmt(d.valor)})`).join(', ')}.</p>
+      <p class="fonte">${FONTES.financiamento}</p>
+    </div>`;
+  },
+};
+
+/* ================= VARIANTE B — "Painel de dados" =================
+   Denso: cartões, números grandes, tabelas. Prosa quase zero; glossário em linhas pequenas. */
+const VarianteB = {
+  nome: 'B — Painel de dados',
+  card(titulo, fonte, inner) {
+    return `<section style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px;">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;">
+        <h2 style="margin:0;font-size:16px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);">${titulo}</h2>
+        <span class="fonte">${fonte}</span>
+      </div>
+      <div style="margin-top:14px;">${inner}</div>
+    </section>`;
+  },
+  home() {
+    return `<div style="max-width:1100px;margin:28px auto;padding:0 20px 120px;">
+      <h1 style="font-size:24px;">Voz do Povo <span style="font-weight:400;color:var(--muted);font-size:15px;">— dados oficiais sobre políticos federais, em linguagem simples</span></h1>
+      <div style="display:flex;gap:10px;margin:8px 0 24px;">
+        <button style="padding:6px 16px;border-radius:999px;border:1px solid var(--accent);background:var(--accent);color:#fff;">Deputados</button>
+        <button style="padding:6px 16px;border-radius:999px;border:1px solid var(--line);background:#fff;">Senadores</button>
+        <input placeholder="Buscar parlamentar por nome…" style="margin-left:auto;padding:6px 14px;border:1px solid var(--line);border-radius:999px;min-width:260px;">
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;">
+        ${rankings.map(r => this.card(r.titulo, r.subtitulo, `<table>${barRows(r.linhas, true)}</table>`)).join('')}
+      </div>
+    </div>`;
+  },
+  perfil() {
+    const p = politico;
+    const maxMensal = Math.max(...p.gastos.mensal.map(m => m.v));
+    return `<div style="max-width:1100px;margin:28px auto;padding:0 20px 120px;">
+      <header style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:24px;">
+        <h1 style="margin:0;font-size:26px;">${p.nome}</h1>
+        <p style="margin:4px 0 14px;color:var(--muted);">${p.cargo} · ${p.partido}–${p.uf} · ${p.mandato}</p>
+        <p style="margin:0;max-width:760px;">${resumo()}</p>
+      </header>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px;margin-top:16px;">
+        ${this.card('Gastos 2026 · cota parlamentar', FONTES.gastos, `
+          <div style="font-size:34px;font-weight:700;">${fmt(p.gastos.totalAno)}</div>
+          <div class="fonte" style="margin-bottom:14px;">≈ ${p.gastos.salariosMinimos} salários mínimos · mediana da bancada de ${p.uf}: ${fmt(p.gastos.medianaUf)}</div>
+          <div style="display:flex;align-items:flex-end;gap:6px;height:64px;margin-bottom:14px;">
+            ${p.gastos.mensal.map(m => `<div title="${m.mes}: ${fmt(m.v)}" style="flex:1;background:var(--accent-soft);border-radius:4px 4px 0 0;height:${pct(m.v, maxMensal)}%;"></div>`).join('')}
+          </div>
+          <table>${p.gastos.maiores.map(g => `<tr>
+            <td>${g.tipo}<br><span class="fonte">${g.fornecedor} · ${g.data}</span></td>
+            <td class="num">${fmt(g.valor)}<br>${badge(g.atencao)}</td>
+          </tr>`).join('')}</table>`)}
+
+        ${this.card('Emendas 2026', FONTES.emendas, `
+          <div style="display:flex;gap:24px;flex-wrap:wrap;">
+            <div><div class="fonte">Empenhado (reservado)</div><div style="font-size:26px;font-weight:700;">${fmt(p.emendas.porAno[2].empenhado)}</div></div>
+            <div><div class="fonte">Pago de fato</div><div style="font-size:26px;font-weight:700;">${fmt(p.emendas.porAno[2].pago)}</div></div>
+            <div><div class="fonte">% pago</div><div style="font-size:26px;font-weight:700;color:var(--warn);">${pct(p.emendas.porAno[2].pago, p.emendas.porAno[2].empenhado)}%</div></div>
+          </div>
+          <table style="margin-top:14px;">${p.emendas.maiores.map(e => `<tr>
+            <td>${e.destino} ${e.pix ? '<span class="badge-pix">PIX</span>' : ''}<br><span class="fonte">${e.area} · ${e.ano}</span></td>
+            <td class="num">${fmt(e.valor)}<br>${badge(e.atencao)}</td>
+          </tr>`).join('')}</table>
+          <p class="fonte" style="margin-top:10px;">Emenda = dinheiro federal direcionado pelo parlamentar. <strong>PIX</strong> = sem objeto específico, a mais difícil de rastrear.</p>`)}
+
+        ${this.card('Votos e presença', FONTES.votos, `
+          <div style="font-size:34px;font-weight:700;">${String(p.presenca.taxa).replace('.', ',')}%</div>
+          <div class="fonte" style="margin-bottom:14px;">de presença em ${p.presenca.sessoes} sessões com votação</div>
+          <table>${p.votos.map(v => `<tr>
+            <td>${v.tema}<br><span class="fonte">${v.data}</span></td>
+            <td class="num"><strong>${v.voto}</strong><br><span class="fonte">${v.concordou ? 'com o partido' : `contra o partido (${v.partido})`}</span></td>
+          </tr>`).join('')}</table>`)}
+
+        ${this.card('Patrimônio declarado (TSE)', FONTES.patrimonio, `
+          <div style="font-size:34px;font-weight:700;">${fmt(p.patrimonio.total2026)}</div>
+          <div class="fonte" style="margin-bottom:14px;">declarado em 2026 · ${p.patrimonio.variacao.replace('+','alta de ')} desde 2014</div>
+          <table>${p.patrimonio.evolucao.map(e => `<tr><td>${e.ano}</td><td class="num">${fmt(e.valor)}</td>
+            <td style="width:45%"><div class="bar" style="width:${pct(e.valor, p.patrimonio.total2026)}%"></div></td></tr>`).join('')}</table>`)}
+
+        ${this.card(`Financiamento de campanha ${p.financiamento.ciclo}`, FONTES.financiamento, `
+          <div style="font-size:34px;font-weight:700;">${fmt(p.financiamento.totalArrecadado)}</div>
+          <div class="fonte" style="margin-bottom:14px;">arrecadado no ciclo</div>
+          <table>${p.financiamento.doadores.map(d => `<tr><td>${d.nome}</td><td class="num">${fmt(d.valor)}</td></tr>`).join('')}</table>`)}
+      </div>
+    </div>`;
+  },
+};
+
+/* ================= VARIANTE C — "Em 30 segundos" =================
+   Divulgação progressiva: veredito no topo, cada seção abre em <details>. */
+const VarianteC = {
+  nome: 'C — Em 30 segundos',
+  home() {
+    return `<div style="max-width:820px;margin:32px auto;padding:0 20px 120px;">
+      <h1>Voz do Povo</h1>
+      <p style="color:var(--muted);">Rankings ao vivo dos dados oficiais. Abra o que interessar:</p>
+      ${rankings.map(r => `
+        <details style="background:var(--card);border:1px solid var(--line);border-radius:12px;margin:12px 0;" ${r === rankings[0] ? 'open' : ''}>
+          <summary style="cursor:pointer;padding:16px 20px;font-weight:600;font-size:17px;">
+            ${r.titulo} <span class="fonte" style="font-weight:400;">— 1º: ${r.linhas[0].nome}</span>
+          </summary>
+          <div style="padding:0 20px 16px;">
+            <p class="fonte" style="margin-top:0;">${r.subtitulo}</p>
+            <table>${barRows(r.linhas, true)}</table>
+          </div>
+        </details>`).join('')}
+    </div>`;
+  },
+  perfil() {
+    const p = politico;
+    return `<div style="max-width:820px;margin:32px auto;padding:0 20px 120px;">
+      <h1 style="margin-bottom:2px;">${p.nome}</h1>
+      <p style="color:var(--muted);margin-top:0;">${p.cargo} · ${p.partido}–${p.uf} · ${p.mandato}</p>
+
+      <div style="background:var(--card);border:2px solid var(--accent);border-radius:12px;padding:20px;margin:16px 0 28px;">
+        <h2 style="margin:0 0 10px;font-size:18px;">⏱ Em 30 segundos</h2>
+        <ul style="margin:0;padding-left:20px;">
+          <li>Gastou <strong>${fmt(p.gastos.totalAno)}</strong> da cota em 2026 — faixa típica da bancada de ${p.uf}.</li>
+          <li><strong>2 itens chamam atenção</strong> ${badge(null).replace('>⚠ chama atenção: ','>')} por regras fixas e transparentes.</li>
+          <li>${fmt(p.emendas.porAno[2].empenhado)} em emendas em 2026; só ${pct(p.emendas.porAno[2].pago, p.emendas.porAno[2].empenhado)}% pago até agora.</li>
+          <li>Presença de ${String(p.presenca.taxa).replace('.', ',')}% nas sessões votadas.</li>
+          <li>Patrimônio declarado: ${fmt(p.patrimonio.total2026)} (${p.patrimonio.variacao.replace('+','alta de ')} desde 2014).</li>
+        </ul>
+      </div>
+
+      ${[
+        ['Gastos do mandato', `2026: ${fmt(p.gastos.totalAno)} · ${p.gastos.maiores.length} maiores itens`, `
+          <p>Cota parlamentar = verba para custear o mandato (passagens, escritório, divulgação).</p>
+          <table>${p.gastos.maiores.map(g => `<tr><td>${g.tipo}<br><span class="fonte">${g.fornecedor} · ${g.data}</span></td><td class="num">${fmt(g.valor)}<br>${badge(g.atencao)}</td></tr>`).join('')}</table>
+          <p class="fonte">${FONTES.gastos}</p>`],
+        ['Emendas parlamentares', `2026: ${fmt(p.emendas.porAno[2].empenhado)} empenhados · ${fmt(p.emendas.porAno[2].pago)} pagos`, `
+          ${explainer(p.emendas.explicacao)}
+          <table><tr><th>Ano</th><th class="num">Empenhado</th><th class="num">Pago</th><th class="num">% pago</th></tr>
+          ${p.emendas.porAno.map(e => `<tr><td>${e.ano}</td><td class="num">${fmt(e.empenhado)}</td><td class="num">${fmt(e.pago)}</td><td class="num">${pct(e.pago, e.empenhado)}%</td></tr>`).join('')}</table>
+          <table style="margin-top:10px;">${p.emendas.maiores.map(e => `<tr><td>${e.destino} ${e.pix ? '<span class="badge-pix">PIX</span>' : ''}</td><td class="num">${fmt(e.valor)}<br>${badge(e.atencao)}</td></tr>`).join('')}</table>
+          <p class="fonte">${FONTES.emendas}</p>`],
+        ['Votos e presença', `${String(p.presenca.taxa).replace('.', ',')}% de presença · ${p.votos.length} votos recentes`, `
+          <table>${p.votos.map(v => `<tr><td>${v.tema}<br><span class="fonte">${v.data}</span></td><td class="num"><strong>${v.voto}</strong><br><span class="fonte">${v.concordou ? 'com o partido' : `contra o partido`}</span></td></tr>`).join('')}</table>
+          <p class="fonte">${FONTES.votos}</p>`],
+        ['Patrimônio declarado', `${fmt(p.patrimonio.total2026)} em 2026 · evolução desde 2014`, `
+          <table>${p.patrimonio.evolucao.map(e => `<tr><td>${e.ano}</td><td class="num">${fmt(e.valor)}</td><td style="width:45%"><div class="bar" style="width:${pct(e.valor, p.patrimonio.total2026)}%"></div></td></tr>`).join('')}</table>
+          <p class="fonte">${FONTES.patrimonio}</p>`],
+        ['Financiamento de campanha', `2026: ${fmt(p.financiamento.totalArrecadado)} arrecadados`, `
+          <table>${p.financiamento.doadores.map(d => `<tr><td>${d.nome}</td><td class="num">${fmt(d.valor)}</td></tr>`).join('')}</table>
+          <p class="fonte">${FONTES.financiamento}</p>`],
+      ].map(([t, teaser, inner]) => `
+        <details style="background:var(--card);border:1px solid var(--line);border-radius:12px;margin:12px 0;">
+          <summary style="cursor:pointer;padding:16px 20px;">
+            <strong style="font-size:17px;">${t}</strong><br>
+            <span class="fonte">${teaser}</span>
+          </summary>
+          <div style="padding:0 20px 16px;">${inner}</div>
+        </details>`).join('')}
+    </div>`;
+  },
+};
+
+/* ================= switcher ================= */
+const VARIANTS = [VarianteA, VarianteB, VarianteC];
+let state = {
+  variant: new URLSearchParams(location.search).get('variant') || 'A',
+  tab: new URLSearchParams(location.search).get('tab') || 'perfil',
+};
+function render() {
+  const idx = Math.max(0, 'ABC'.indexOf(state.variant));
+  const v = VARIANTS[idx];
+  document.getElementById('root').innerHTML = state.tab === 'home' ? v.home() : v.perfil();
+  document.getElementById('switcher-label').textContent = v.nome;
+  document.getElementById('tab-home').classList.toggle('active', state.tab === 'home');
+  document.getElementById('tab-perfil').classList.toggle('active', state.tab === 'perfil');
+  const qs = new URLSearchParams({ variant: state.variant, tab: state.tab });
+  history.replaceState(null, '', '?' + qs);
+  window.scrollTo(0, 0);
+}
+function cycle(d) {
+  const idx = 'ABC'.indexOf(state.variant);
+  state.variant = 'ABC'[(idx + d + 3) % 3];
+  render();
+}
+function setTab(t) { state.tab = t; render(); }
+document.addEventListener('keydown', e => {
+  if (/INPUT|TEXTAREA/.test(e.target.tagName)) return;
+  if (e.key === 'ArrowLeft') cycle(-1);
+  if (e.key === 'ArrowRight') cycle(1);
+});
+render();
+</script>
+</body>
+</html>
