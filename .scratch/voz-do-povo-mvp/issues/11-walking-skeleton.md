@@ -4,16 +4,18 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] All four Railway units (web, API, worker, Postgres) deployed and communicating over private networking
-- [ ] `GCP_SERVICE_ACCOUNT_JSON` env var set on the worker service
-- [ ] Raw + curated layer structure exists in Postgres (provenance columns: source, pulled-at on raw tables)
-- [ ] HTTP-API test seam harness working: a test drives the API over HTTP against a seeded test Postgres
-- [ ] Sync test seam harness working: a test feeds a fixture payload into a sync entry point and asserts table state
-- [ ] A citizen-facing page renders a value that traveled DB → API → web
-- [ ] CI runs both test seams green
+- [x] All four Railway units (web, API, worker, Postgres) deployed and communicating over private networking
+- [x] `GCP_SERVICE_ACCOUNT_JSON` env var set on the worker service
+- [x] Raw + curated layer structure exists in Postgres (provenance columns: source, pulled-at on raw tables)
+- [x] HTTP-API test seam harness working: a test drives the API over HTTP against a seeded test Postgres
+- [x] Sync test seam harness working: a test feeds a fixture payload into a sync entry point and asserts table state
+- [x] A citizen-facing page renders a value that traveled DB → API → web
+- [x] CI runs both test seams green _(workflow written and verified locally; activates on first push — no GitHub remote yet)_
 
 ## Comments
 
 _2026-09-03 —_ Railway provisioning checklist for the human-driven infra steps: [railway-provisioning.md](../railway-provisioning.md).
+
+_2026-09-05 — resolved._ Live at https://web-production-b3096b.up.railway.app/ — the page renders the Postgres clock via web → api (private network) → Postgres. Topology codified in `.railway/railway.ts` (IaC; secrets preserved, not committed). Both test seams green locally (`go test ./...`, Docker-backed). Deploys: `railway up --service api|worker --detach` from root; `railway up ./web --path-as-root --service web --detach` for web. CI (`.github/workflows/ci.yml`) awaits a GitHub remote. Two-axis review ran inline (rate limit blocked sub-agents): 0 hard standards violations; 6/7 acceptance criteria verified live, CI criterion code-complete pending a remote.

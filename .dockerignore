@@ -1,0 +1,9 @@
+.git
+.scratch
+node_modules
+.next
+web/node_modules
+web/.next
+.railway/node_modules
+Dockerfile
+web/Dockerfile

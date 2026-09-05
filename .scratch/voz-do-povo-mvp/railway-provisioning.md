@@ -10,7 +10,7 @@ brew install railway        # macOS
 # or: bash <(curl -fsSL railway.com/install.sh)
 ```
 
-- [ ] `railway --version` prints a version
+- [x] `railway --version` prints a version
 
 ## 2. Login
 
@@ -19,7 +19,7 @@ railway login               # opens the browser
 railway whoami              # verify
 ```
 
-- [ ] `railway whoami` shows your Railway account
+- [x] `railway whoami` shows your Railway account
 
 ## 3. Create and link the project
 
@@ -28,7 +28,7 @@ railway init                # name it: voz-do-povo
 railway status              # verify the directory is linked
 ```
 
-- [ ] `railway status` shows the linked project
+- [x] `railway status` shows the linked project
 
 ## 4. Provision Postgres
 
@@ -36,8 +36,8 @@ railway status              # verify the directory is linked
 railway add --database postgres
 ```
 
-- [ ] Postgres appears in the project (`railway status` or dashboard)
-- [ ] Note the exact Postgres service name (default: `Postgres`) — needed in stage 6
+- [x] Postgres appears in the project (`railway status` or dashboard)
+- [x] Note the exact Postgres service name (default: `Postgres`) — needed in stage 6
 
 ## 5. Create the three app services
 
@@ -50,7 +50,7 @@ railway add                 # interactive — choose "Empty Service", repeat 3×
 
 They stay idle until the skeleton code deploys into them.
 
-- [ ] `web`, `api`, `worker` all exist in the project
+- [x] `web`, `api`, `worker` all exist in the project
 
 ## 6. Set variables
 
@@ -72,9 +72,9 @@ railway variable set -s worker 'DATABASE_URL=${{Postgres.DATABASE_URL}}'
 
 For local dev, also add the compacted JSON to the repo-local `.env` as `GCP_SERVICE_ACCOUNT_JSON`.
 
-- [ ] `railway variable list -s worker` shows `GCP_SERVICE_ACCOUNT_JSON` and `DATABASE_URL`
-- [ ] `railway variable list -s api` shows `DATABASE_URL`
-- [ ] `.env` has `GCP_SERVICE_ACCOUNT_JSON` for local dev
+- [x] `railway variable list -s worker` shows `GCP_SERVICE_ACCOUNT_JSON` and `DATABASE_URL`
+- [x] `railway variable list -s api` shows `DATABASE_URL`
+- [x] `.env` has `GCP_SERVICE_ACCOUNT_JSON` for local dev
 
 ## 7. Verify
 
@@ -83,7 +83,7 @@ railway status
 railway open                # eyeball the dashboard: 1 database + 3 empty services
 ```
 
-- [ ] Project shows Postgres + `web` + `api` + `worker`
+- [x] Project shows Postgres + `web` + `api` + `worker`
 
 ## Reminders that bite later
 
