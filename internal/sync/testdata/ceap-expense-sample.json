@@ -1,0 +1,26 @@
+[
+  {
+    "txNomeParlamentar": "MARIA EXEMPLO",
+    "txNomeCasa": "Câmara dos Deputados",
+    "sgUF": "SP",
+    "sgPartido": "PT",
+    "txtFornecedor": "CIA AEREA EXEMPLO",
+    "txtCNPJCPF": "12.345.678/0001-90",
+    "txtDescricao": "PASSAGEM AÉREO - RPA",
+    "vlrLiquido": 2140.55,
+    "numAno": 2026,
+    "numMes": 8
+  },
+  {
+    "txNomeParlamentar": "MARIA EXEMPLO",
+    "txNomeCasa": "Câmara dos Deputados",
+    "sgUF": "SP",
+    "sgPartido": "PT",
+    "txtFornecedor": "POSTO EXEMPLO LTDA",
+    "txtCNPJCPF": "98.765.432/0001-10",
+    "txtDescricao": "COMBUSTÍVEIS E LUBRIFICANTES",
+    "vlrLiquido": 850.0,
+    "numAno": 2026,
+    "numMes": 8
+  }
+]

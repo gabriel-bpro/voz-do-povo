@@ -1,0 +1,9 @@
+.git
+.scratch
+node_modules
+.next
+web/node_modules
+web/.next
+.hosting_provider/node_modules
+Dockerfile
+web/Dockerfile
