@@ -4,7 +4,7 @@
 
 **Blocked by:** 11 — Walking skeleton.
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Canonical `politician`, `politician_source_id`, `party`, and unified `expense` curated tables exist
 - [ ] Câmara deputies registry syncs into curated, creating canonical politicians with Câmara source ids

@@ -1,0 +1,20 @@
+[
+  {
+    "DeputyID": 204001,
+    "DeputyName": "MARIA EXEMPLO",
+    "DeputyUF": "SP",
+    "PartySigla": "PT",
+    "Category": "COMBUSTÍVEIS E LUBRIFICANTES",
+    "SupplierName": "POSTO EXEMPLO LTDA",
+    "SupplierTaxID": "98765432000110",
+    "DocumentNumber": "NF-300",
+    "IssuedAt": "2026-07-05",
+    "Year": 2026,
+    "Month": 7,
+    "AmountDocument": 150.00,
+    "AmountGlosa": 0,
+    "AmountNet": 150.00,
+    "DocumentURL": "https://www.camara.leg.br/cota-parlamentar/documentos/publ/0001/2026/8800001.pdf",
+    "DocumentID": "8800001"
+  }
+]

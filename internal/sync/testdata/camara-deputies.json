@@ -1,0 +1,18 @@
+[
+  {
+    "ID": 204001,
+    "Name": "MARIA EXEMPLO",
+    "CivilName": "Maria da Silva Exemplo",
+    "CPF": "12345678901",
+    "PartySigla": "PT",
+    "UF": "SP"
+  },
+  {
+    "ID": 204002,
+    "Name": "JOÃO AMOSTRA",
+    "CivilName": "João Amostra Souza",
+    "CPF": "98765432100",
+    "PartySigla": "PL",
+    "UF": "RJ"
+  }
+]
