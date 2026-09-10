@@ -148,11 +148,7 @@ func syncCamaraRegistry(ctx context.Context, db *sql.DB, client *camara.Client) 
 // syncCamaraBulk re-ingests the CEAP bulk file for a year: freshness (the
 // file is updated daily) and ground-truth reconciliation in one pass.
 func syncCamaraBulk(ctx context.Context, db *sql.DB, client *camara.Client, year int) error {
-	var all []camara.Expense
-	err := client.FetchBulkExpenses(ctx, year, func(e camara.Expense) error {
-		all = append(all, e)
-		return nil
-	})
+	all, err := client.FetchBulkExpenses(ctx, year)
 	if err != nil {
 		return fmt.Errorf("fetch bulk %d: %w", year, err)
 	}

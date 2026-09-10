@@ -67,11 +67,18 @@ func LinkIdentity(ctx context.Context, tx *sql.Tx, id Identity) (int64, error) {
 			`SELECT id FROM curated.politician WHERE cpf = $1`, id.CPF).Scan(&pid)
 		if err == nil {
 			if id.SourceID != "" {
-				if _, err := tx.ExecContext(ctx,
-					`INSERT INTO curated.politician_source_id (politician_id, source, source_id)
-					 VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
-					pid, id.Source, id.SourceID); err != nil {
-					return 0, fmt.Errorf("backfill source id: %w", err)
+				conflict, err := backfillSourceID(ctx, tx, pid, id)
+				if err != nil {
+					return 0, err
+				}
+				if conflict {
+					// CPF says one person, the source id is already mapped
+					// to another: a false link is a defamation-grade bug —
+					// queue for a human, link nothing.
+					if err := queueIdentityReview(ctx, tx, id, pid, "conflicting-identifiers"); err != nil {
+						return 0, err
+					}
+					return 0, nil
 				}
 			}
 			return pid, nil
@@ -102,7 +109,7 @@ func LinkIdentity(ctx context.Context, tx *sql.Tx, id Identity) (int64, error) {
 			return 0, fmt.Errorf("iterate candidates: %w", err)
 		}
 		for _, pid := range candidates {
-			if err := queueIdentityReview(ctx, tx, id, pid); err != nil {
+			if err := queueIdentityReview(ctx, tx, id, pid, "fuzzy-name-uf-match"); err != nil {
 				return 0, err
 			}
 		}
@@ -112,21 +119,44 @@ func LinkIdentity(ctx context.Context, tx *sql.Tx, id Identity) (int64, error) {
 	return 0, nil
 }
 
-// queueIdentityReview files a fuzzy match for a human. Pending rows are
-// deduplicated on (source, identity, candidate) so re-ingests don't spam the
-// queue.
-func queueIdentityReview(ctx context.Context, tx *sql.Tx, id Identity, candidateID int64) error {
+// backfillSourceID attaches a source id to a CPF-matched politician. Reports
+// conflict=true when the source id is already mapped to a DIFFERENT
+// politician (nothing is written in that case).
+func backfillSourceID(ctx context.Context, tx *sql.Tx, politicianID int64, id Identity) (conflict bool, err error) {
+	var mapped int64
+	err = tx.QueryRowContext(ctx,
+		`SELECT politician_id FROM curated.politician_source_id WHERE source = $1 AND source_id = $2`,
+		id.Source, id.SourceID).Scan(&mapped)
+	if err != nil && err != sql.ErrNoRows {
+		return false, fmt.Errorf("check source id mapping: %w", err)
+	}
+	if err == nil {
+		return mapped != politicianID, nil
+	}
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO curated.politician_source_id (politician_id, source, source_id)
+		 VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+		politicianID, id.Source, id.SourceID); err != nil {
+		return false, fmt.Errorf("backfill source id: %w", err)
+	}
+	return false, nil
+}
+
+// queueIdentityReview files a fuzzy or conflicting match for a human. Pending
+// rows are deduplicated on (source, identity, candidate) so re-ingests don't
+// spam the queue.
+func queueIdentityReview(ctx context.Context, tx *sql.Tx, id Identity, candidateID int64, reason string) error {
 	identityJSON, err := json.Marshal(id)
 	if err != nil {
 		return fmt.Errorf("marshal identity: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO curated.identity_link_review (source, identity, candidate_politician_id, reason)
-		SELECT $1, $2, $3, 'fuzzy-name-uf-match'
+		SELECT $1, $2, $3, $4
 		WHERE NOT EXISTS (
 			SELECT 1 FROM curated.identity_link_review
 			WHERE source = $1 AND identity = $2 AND candidate_politician_id = $3 AND status = 'pending'
-		)`, id.Source, identityJSON, candidateID); err != nil {
+		)`, id.Source, identityJSON, candidateID, reason); err != nil {
 		return fmt.Errorf("queue identity review: %w", err)
 	}
 	return nil

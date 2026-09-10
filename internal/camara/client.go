@@ -181,48 +181,37 @@ type bulkExpenseRow struct {
 	URLDocumento     string      `json:"urlDocumento"`
 }
 
-// FetchBulkExpenses downloads the CEAP bulk year file and invokes yield for
-// each row, normalized. Streaming: rows are yielded as decoded, so a year file
-// never materializes as a slice.
-func (c *Client) FetchBulkExpenses(ctx context.Context, year int, yield func(Expense) error) error {
+// FetchBulkExpenses downloads the CEAP bulk year file and returns every row,
+// normalized.
+func (c *Client) FetchBulkExpenses(ctx context.Context, year int) ([]Expense, error) {
 	url := fmt.Sprintf(c.bulkURL, year)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return fmt.Errorf("build request: %w", err)
+		return nil, fmt.Errorf("build request: %w", err)
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return fmt.Errorf("get %s: %w", url, err)
+		return nil, fmt.Errorf("get %s: %w", url, err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("get %s: status %d", url, resp.StatusCode)
+		return nil, fmt.Errorf("get %s: status %d", url, resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("read bulk zip: %w", err)
+		return nil, fmt.Errorf("read bulk zip: %w", err)
 	}
-	if err := ParseBulkZip(body, yield); err != nil {
-		return fmt.Errorf("bulk %d: %w", year, err)
-	}
-	return nil
-}
-
-// ParseBulkZip decodes a CEAP bulk year zip (a single JSON entry wrapping the
-// rows in "dados"), normalizing and yielding each row. Streaming: rows are
-// yielded as decoded, so a year file never materializes as a slice.
-func ParseBulkZip(body []byte, yield func(Expense) error) error {
 	zr, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
 	if err != nil {
-		return fmt.Errorf("open bulk zip: %w", err)
+		return nil, fmt.Errorf("open bulk zip: %w", err)
 	}
 	if len(zr.File) != 1 {
-		return fmt.Errorf("bulk zip has %d files, want 1", len(zr.File))
+		return nil, fmt.Errorf("bulk zip has %d files, want 1", len(zr.File))
 	}
 	f, err := zr.File[0].Open()
 	if err != nil {
-		return fmt.Errorf("open bulk entry: %w", err)
+		return nil, fmt.Errorf("open bulk entry: %w", err)
 	}
 	defer f.Close()
 
@@ -231,36 +220,35 @@ func ParseBulkZip(body []byte, yield func(Expense) error) error {
 	for {
 		tok, err := dec.Token()
 		if err != nil {
-			return fmt.Errorf("decode bulk envelope: %w", err)
+			return nil, fmt.Errorf("decode bulk envelope: %w", err)
 		}
 		if key, ok := tok.(string); ok && key == bulkPayloadKey {
 			break
 		}
 	}
 	if _, err := dec.Token(); err != nil { // opening '['
-		return fmt.Errorf("decode bulk array start: %w", err)
+		return nil, fmt.Errorf("decode bulk array start: %w", err)
 	}
+	var out []Expense
 	for dec.More() {
 		// Two-step: keep the row's verbatim bytes for the raw layer, then
 		// normalize.
 		var raw json.RawMessage
 		if err := dec.Decode(&raw); err != nil {
-			return fmt.Errorf("decode bulk row: %w", err)
+			return nil, fmt.Errorf("decode bulk row: %w", err)
 		}
 		var row bulkExpenseRow
 		if err := json.Unmarshal(raw, &row); err != nil {
-			return fmt.Errorf("parse bulk row: %w", err)
+			return nil, fmt.Errorf("parse bulk row: %w", err)
 		}
 		exp, err := row.normalize()
 		if err != nil {
-			return fmt.Errorf("normalize bulk row (idDocumento %d): %w", row.IDDocumento, err)
+			return nil, fmt.Errorf("normalize bulk row (idDocumento %d): %w", row.IDDocumento, err)
 		}
 		exp.Raw = raw
-		if err := yield(exp); err != nil {
-			return err
-		}
+		out = append(out, exp)
 	}
-	return nil
+	return out, nil
 }
 
 func (r bulkExpenseRow) normalize() (Expense, error) {
