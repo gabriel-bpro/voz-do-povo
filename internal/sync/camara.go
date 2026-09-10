@@ -2,7 +2,9 @@ package sync
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -18,10 +20,10 @@ import (
 const (
 	SourceCamaraDeputies = "camara-deputies"
 	// SourceCamaraCEAPBulk is the prefix for the per-year bulk reconcile keys
-	// (e.g. "camara-ceap-bulk-2026").
+	// (e.g. "camara-ceap-bulk-2026"). The bulk files are updated daily and
+	// are the only working CEAP source: the API's despesas endpoint returns
+	// empty for every deputy (verified 2026-09-08).
 	SourceCamaraCEAPBulk = "camara-ceap-bulk-"
-	// SourceCamaraCEAPDelta is the daily per-deputy API delta key.
-	SourceCamaraCEAPDelta = "camara-ceap-api-delta"
 
 	houseCamara = "camara"
 )
@@ -132,14 +134,15 @@ type ExpenseSyncStats struct {
 	ReconciledOut int64 // curated rows deleted by bulk reconcile (absent from the pull)
 }
 
-// SyncCamaraExpenses lands CEAP expenses (API delta or bulk reconcile) into
-// raw under the given source key — replacing that key's previous rows — and
-// promotes them into curated.expense, upserting by (house, document id) so
-// re-ingests reconcile instead of duplicating. When reconcileYear > 0 (the
-// weekly bulk sync), curated rows for that year absent from this pull are
-// deleted — the bulk file is ground truth. Identity linking is CPF-first with
-// fuzzy matches queued for review, never force-linked. All-or-nothing: any
-// failure rolls back, leaving curated data untouched.
+// SyncCamaraExpenses lands CEAP expenses into raw under the given source key —
+// replacing that key's previous rows — and promotes them into curated.expense.
+// CEAP registers have no unique id (ideDocumento groups installments), so the
+// dedup key is a hash of the full normalized row: a corrected row lands as a
+// new register and the stale one is reconciled out. When reconcileYear > 0,
+// curated rows for that year absent from this pull are deleted — the bulk file
+// is ground truth. Identity linking is CPF-first with fuzzy matches queued for
+// review, never force-linked. All-or-nothing: any failure rolls back, leaving
+// curated data untouched.
 func SyncCamaraExpenses(ctx context.Context, db *sql.DB, source string, reconcileYear int, expenses []camara.Expense) (ExpenseSyncStats, error) {
 	var stats ExpenseSyncStats
 
@@ -157,9 +160,15 @@ func SyncCamaraExpenses(ctx context.Context, db *sql.DB, source string, reconcil
 
 	payloads := make([]json.RawMessage, 0, len(expenses))
 	for _, e := range expenses {
-		p, err := json.Marshal(e)
-		if err != nil {
-			return stats, fmt.Errorf("marshal expense %q: %w", e.DocumentID, err)
+		// Prefer the verbatim source record; fall back to the normalized
+		// struct (fixtures, future sources without a verbatim path).
+		p := e.Raw
+		if len(p) == 0 {
+			var err error
+			p, err = json.Marshal(e)
+			if err != nil {
+				return stats, fmt.Errorf("marshal expense %q: %w", e.DocumentID, err)
+			}
 		}
 		payloads = append(payloads, p)
 	}
@@ -171,16 +180,16 @@ func SyncCamaraExpenses(ctx context.Context, db *sql.DB, source string, reconcil
 	parties := map[string]int64{}
 	for i, e := range expenses {
 		stats.Rows++
-		if e.DocumentID == "" || e.Year == 0 || e.Month == 0 {
-			return stats, fmt.Errorf("expense row %d missing document id or period: %+v", i, e)
+		if e.Year == 0 || e.Month == 0 || e.Category == "" {
+			return stats, fmt.Errorf("expense row %d missing category or period: %+v", i, e)
 		}
+		rowKey := expenseRowKey(e)
 
 		politicianID, err := LinkIdentity(ctx, tx, Identity{
-			Source:   houseCamara,
-			SourceID: int64OrEmpty(e.DeputyID),
-			CPF:      e.DeputyCPF,
-			Name:     e.DeputyName,
-			UF:       e.DeputyUF,
+			Source: houseCamara,
+			CPF:    e.DeputyCPF,
+			Name:   e.DeputyName,
+			UF:     e.DeputyUF,
 		})
 		if err != nil {
 			return stats, fmt.Errorf("link expense %q: %w", e.DocumentID, err)
@@ -220,28 +229,17 @@ func SyncCamaraExpenses(ctx context.Context, db *sql.DB, source string, reconcil
 				politician_id, party_id, house, category,
 				supplier_name, supplier_tax_id, document_number, issued_at,
 				year, month, amount_document, amount_glosa, amount_net,
-				document_url, source_document_id, raw_id, synced_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16, now())
-			ON CONFLICT (house, source_document_id) DO UPDATE SET
+				document_url, source_document_id, source_row_key, raw_id, synced_at
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17, now())
+			ON CONFLICT (house, source_row_key) DO UPDATE SET
 				politician_id   = EXCLUDED.politician_id,
 				party_id        = EXCLUDED.party_id,
-				category        = EXCLUDED.category,
-				supplier_name   = EXCLUDED.supplier_name,
-				supplier_tax_id = EXCLUDED.supplier_tax_id,
-				document_number = EXCLUDED.document_number,
-				issued_at       = EXCLUDED.issued_at,
-				year            = EXCLUDED.year,
-				month           = EXCLUDED.month,
-				amount_document = EXCLUDED.amount_document,
-				amount_glosa    = EXCLUDED.amount_glosa,
-				amount_net      = EXCLUDED.amount_net,
-				document_url    = EXCLUDED.document_url,
 				raw_id          = EXCLUDED.raw_id,
 				synced_at       = now()`,
 			pid, partyID, houseCamara, e.Category,
 			nilIfEmpty(e.SupplierName), nilIfEmpty(e.SupplierTaxID), nilIfEmpty(e.DocumentNumber), issuedAt,
 			e.Year, e.Month, e.AmountDocument, e.AmountGlosa, e.AmountNet,
-			nilIfEmpty(e.DocumentURL), e.DocumentID, rawIDs[i]); err != nil {
+			nilIfEmpty(e.DocumentURL), nilIfEmpty(e.DocumentID), rowKey, rawIDs[i]); err != nil {
 			return stats, fmt.Errorf("upsert expense %q: %w", e.DocumentID, err)
 		}
 	}
@@ -363,16 +361,19 @@ func replaceRawReturningIDs(ctx context.Context, tx *sql.Tx, source string, payl
 	return ids, nil
 }
 
+// expenseRowKey is the dedup key for a CEAP register: a hash of the full
+// normalized row. CEAP has no per-register unique id (ideDocumento groups
+// installments of one document), so identity = the whole row; a source-side
+// correction produces a new key and the reconcile pass removes the stale row.
+func expenseRowKey(e camara.Expense) string {
+	b, _ := json.Marshal(e)
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
+}
+
 func nilIfEmpty(s string) *string {
 	if s == "" {
 		return nil
 	}
 	return &s
-}
-
-func int64OrEmpty(v int64) string {
-	if v == 0 {
-		return ""
-	}
-	return strconv.FormatInt(v, 10)
 }

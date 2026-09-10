@@ -1,6 +1,6 @@
 [
   {
-    "DeputyID": 204001,
+    "DeputyCPF": "12345678901",
     "DeputyName": "MARIA EXEMPLO",
     "DeputyUF": "SP",
     "PartySigla": "PT",
@@ -18,7 +18,7 @@
     "DocumentID": "8800001"
   },
   {
-    "DeputyID": 0,
+    "DeputyCPF": "",
     "DeputyName": "Maria Exemplo",
     "DeputyUF": "SP",
     "PartySigla": "PT",
@@ -36,7 +36,6 @@
     "DocumentID": "8800002"
   },
   {
-    "DeputyID": 0,
     "DeputyCPF": "98765432100",
     "DeputyName": "J. AMOSTRA",
     "DeputyUF": "RJ",
@@ -55,11 +54,11 @@
     "DocumentID": "8800003"
   },
   {
-    "DeputyID": 999999,
-    "DeputyName": "NINGUÉM DESCONHECIDO",
-    "DeputyUF": "XX",
-    "PartySigla": "ZZZ",
-    "Category": "TELEFONIA",
+    "DeputyCPF": "",
+    "DeputyName": "LID.EXEMPLO-CD",
+    "DeputyUF": "NA",
+    "PartySigla": "",
+    "Category": "MANUTENÇÃO DE ESCRITÓRIO DE APOIO À ATIVIDADE PARLAMENTAR",
     "SupplierName": "TELECOM EXEMPLO SA",
     "SupplierTaxID": "11111111000111",
     "DocumentNumber": "NF-303",

@@ -5,7 +5,7 @@ A web app to help people understand, investigate, and do diligence on the politi
 ## Layout
 
 - `cmd/api`, `cmd/worker` — Go services (API serves the curated layer; worker runs syncs)
-- `internal/` — `store` (Postgres + embedded migrations in `internal/store/migrations/`), `httpapi`, `sync`, `testharness`
+- `internal/` — `store` (Postgres + embedded migrations in `internal/store/migrations/`), `httpapi`, `sync` (raw landing + promotion to curated, identity linkage), `camara` (Câmara source adapter: fetch + parse only, no DB), `testharness`
 - `web/` — Next.js app (App Router); note `web/AGENTS.md` (Next-version-specific rules)
 - `.railway/railway.ts` — Railway infrastructure as code (4 units: web, api, worker, Postgres); change via `railway config plan` / `apply`
 
