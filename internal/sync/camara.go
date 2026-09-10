@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
 	"voz-do-povo/internal/camara"
@@ -84,29 +83,21 @@ func SyncCamaraDeputies(ctx context.Context, db *sql.DB, deputies []camara.Deput
 		}
 
 		if politicianID == 0 {
-			var cpf *string
-			if d.CPF != "" {
-				cpf = &d.CPF
-			}
 			err = tx.QueryRowContext(ctx, `
 				INSERT INTO curated.politician (civil_name, parliamentary_name, name_norm, uf, cpf)
 				VALUES ($1, $2, $3, $4, $5)
 				RETURNING id`,
-				civilName, d.Name, NormalizeName(d.Name), nilIfEmpty(d.UF), cpf).Scan(&politicianID)
+				civilName, d.Name, NormalizeName(d.Name), nilIfEmpty(d.UF), nilIfEmpty(d.CPF)).Scan(&politicianID)
 			if err != nil {
 				return fmt.Errorf("create politician for deputy %d: %w", d.ID, err)
 			}
 		} else {
-			var cpf *string
-			if d.CPF != "" {
-				cpf = &d.CPF
-			}
 			if _, err := tx.ExecContext(ctx, `
 				UPDATE curated.politician
 				SET civil_name = $2, parliamentary_name = $3, name_norm = $4,
 				    uf = $5, cpf = COALESCE($6, cpf), updated_at = now()
 				WHERE id = $1`,
-				politicianID, civilName, d.Name, NormalizeName(d.Name), nilIfEmpty(d.UF), cpf); err != nil {
+				politicianID, civilName, d.Name, NormalizeName(d.Name), nilIfEmpty(d.UF), nilIfEmpty(d.CPF)); err != nil {
 				return fmt.Errorf("update politician %d: %w", politicianID, err)
 			}
 		}
@@ -302,63 +293,6 @@ func upsertParty(ctx context.Context, tx *sql.Tx, sigla string) (int64, error) {
 		return 0, fmt.Errorf("upsert party %q: %w", sigla, err)
 	}
 	return id, nil
-}
-
-// replaceRaw deletes the source key's previous raw rows and inserts the new
-// payloads, in the same transaction.
-func replaceRaw(ctx context.Context, tx *sql.Tx, source string, payloads []json.RawMessage) error {
-	_, err := replaceRawReturningIDs(ctx, tx, source, payloads)
-	return err
-}
-
-// replaceRawReturningIDs is replaceRaw, returning the new raw row ids in
-// payload order for provenance pointers.
-func replaceRawReturningIDs(ctx context.Context, tx *sql.Tx, source string, payloads []json.RawMessage) ([]int64, error) {
-	if _, err := tx.ExecContext(ctx, `DELETE FROM raw.payload WHERE source = $1`, source); err != nil {
-		return nil, fmt.Errorf("replace raw %s: %w", source, err)
-	}
-
-	const batch = 500
-	ids := make([]int64, 0, len(payloads))
-	for start := 0; start < len(payloads); start += batch {
-		end := min(start+batch, len(payloads))
-		chunk := payloads[start:end]
-
-		var sb strings.Builder
-		sb.WriteString(`INSERT INTO raw.payload (source, payload) VALUES `)
-		args := make([]any, 0, len(chunk)+1)
-		args = append(args, source)
-		for i, p := range chunk {
-			if i > 0 {
-				sb.WriteString(", ")
-			}
-			args = append(args, p)
-			fmt.Fprintf(&sb, "($1, $%d)", i+2)
-		}
-		sb.WriteString(` RETURNING id`)
-
-		rows, err := tx.QueryContext(ctx, sb.String(), args...)
-		if err != nil {
-			return nil, fmt.Errorf("insert raw %s batch: %w", source, err)
-		}
-		for rows.Next() {
-			var id int64
-			if err := rows.Scan(&id); err != nil {
-				rows.Close()
-				return nil, fmt.Errorf("scan raw id: %w", err)
-			}
-			ids = append(ids, id)
-		}
-		if err := rows.Err(); err != nil {
-			rows.Close()
-			return nil, fmt.Errorf("iterate raw ids: %w", err)
-		}
-		rows.Close()
-	}
-	if len(ids) != len(payloads) {
-		return nil, fmt.Errorf("insert raw %s: got %d ids for %d payloads", source, len(ids), len(payloads))
-	}
-	return ids, nil
 }
 
 // expenseRowKey is the dedup key for a CEAP register: a hash of the full
