@@ -59,14 +59,15 @@ func main() {
 		return
 	}
 
+	// CEAP cadence: the bulk year files are updated daily and are the only
+	// working CEAP source (the API's despesas endpoint returns empty for
+	// every deputy — verified 2026-09-08), so the current-year bulk re-ingest
+	// runs daily and doubles as the delta.
 	jobs := []job{
 		{"camara-registry", 24 * time.Hour, func(ctx context.Context) error {
 			return syncCamaraRegistry(ctx, db, client)
 		}},
-		{"camara-expenses-delta", 24 * time.Hour, func(ctx context.Context) error {
-			return syncCamaraDelta(ctx, db, client)
-		}},
-		{"camara-expenses-bulk", 7 * 24 * time.Hour, func(ctx context.Context) error {
+		{"camara-expenses-bulk", 24 * time.Hour, func(ctx context.Context) error {
 			return syncCamaraBulk(ctx, db, client, time.Now().Year())
 		}},
 	}
@@ -144,43 +145,8 @@ func syncCamaraRegistry(ctx context.Context, db *sql.DB, client *camara.Client) 
 	return nil
 }
 
-// syncCamaraDelta pulls the current and previous month of expenses per
-// current-legislature deputy from the API (late postings land in the previous
-// month) and promotes them.
-func syncCamaraDelta(ctx context.Context, db *sql.DB, client *camara.Client) error {
-	deputies, err := client.ListDeputies(ctx, 57)
-	if err != nil {
-		return fmt.Errorf("list deputies: %w", err)
-	}
-
-	now := time.Now()
-	periods := [][2]int{{now.Year(), int(now.Month())}}
-	prev := now.AddDate(0, -1, 0)
-	periods = append(periods, [2]int{prev.Year(), int(prev.Month())})
-
-	var all []camara.Expense
-	for _, d := range deputies {
-		for _, p := range periods {
-			expenses, err := client.ListExpenses(ctx, d.ID, p[0], p[1])
-			if err != nil {
-				log.Printf("sync camara-expenses-delta: deputy %d %d-%02d failed: %v", d.ID, p[0], p[1], err)
-				continue
-			}
-			all = append(all, expenses...)
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-
-	stats, err := sync.SyncCamaraExpenses(ctx, db, sync.SourceCamaraCEAPDelta, 0, all)
-	if err != nil {
-		return fmt.Errorf("promote: %w", err)
-	}
-	log.Printf("sync camara-expenses-delta: %+v", stats)
-	return nil
-}
-
-// syncCamaraBulk re-ingests the CEAP bulk file for a year as ground-truth
-// reconciliation.
+// syncCamaraBulk re-ingests the CEAP bulk file for a year: freshness (the
+// file is updated daily) and ground-truth reconciliation in one pass.
 func syncCamaraBulk(ctx context.Context, db *sql.DB, client *camara.Client, year int) error {
 	var all []camara.Expense
 	err := client.FetchBulkExpenses(ctx, year, func(e camara.Expense) error {

@@ -146,76 +146,39 @@ func (c *Client) FillDetail(ctx context.Context, d *Deputy) error {
 	return nil
 }
 
-type apiExpenseItem struct {
-	Ano               int     `json:"ano"`
-	Mes               int     `json:"mes"`
-	TipoDespesa       string  `json:"tipoDespesa"`
-	CodDocumento      int64   `json:"codDocumento"`
-	DataDocumento     string  `json:"dataDocumento"`
-	NumDocumento      string  `json:"numDocumento"`
-	ValorDocumento    float64 `json:"valorDocumento"`
-	URLDocumento      string  `json:"urlDocumento"`
-	NomeFornecedor    string  `json:"nomeFornecedor"`
-	CNPJCPFFornecedor string  `json:"cnpjCpfFornecedor"`
-	ValorLiquido      float64 `json:"valorLiquido"`
-	ValorGlosa        float64 `json:"valorGlosa"`
+// int64OrEmpty renders 0 as "" (absent identifier).
+func int64OrEmpty(v int64) string {
+	if v == 0 {
+		return ""
+	}
+	return strconv.FormatInt(v, 10)
 }
 
-// ListExpenses returns one deputy's API expenses for a year+month (the daily
-// delta shape).
-func (c *Client) ListExpenses(ctx context.Context, deputyID int64, year, month int) ([]Expense, error) {
-	url := fmt.Sprintf("%s/deputados/%d/despesas?ano=%d&mes=%d&itens=%d&ordem=ASC&ordenarPor=ano",
-		c.apiBase, deputyID, year, month, maxPageItems)
-	var out []Expense
-	err := c.getPaged(ctx, url, func(raw json.RawMessage) error {
-		var page []apiExpenseItem
-		if err := json.Unmarshal(raw, &page); err != nil {
-			return fmt.Errorf("decode expenses page: %w", err)
-		}
-		for _, it := range page {
-			out = append(out, Expense{
-				DeputyID:       deputyID,
-				Category:       it.TipoDespesa,
-				SupplierName:   it.NomeFornecedor,
-				SupplierTaxID:  DigitsOnly(it.CNPJCPFFornecedor),
-				DocumentNumber: it.NumDocumento,
-				IssuedAt:       dateOnly(it.DataDocumento),
-				Year:           it.Ano,
-				Month:          it.Mes,
-				AmountDocument: it.ValorDocumento,
-				AmountGlosa:    it.ValorGlosa,
-				AmountNet:      it.ValorLiquido,
-				DocumentURL:    it.URLDocumento,
-				DocumentID:     strconv.FormatInt(it.CodDocumento, 10),
-			})
-		}
-		return nil
-	})
-	return out, err
-}
-
-// bulkExpenseRow is one row of the Ano-{year}.json CEAP bulk file. Amounts may
-// arrive as JSON numbers or pt-BR strings ("1.234,56"), hence json.Number.
+// bulkExpenseRow is one row of the Ano-{year}.json CEAP bulk file. The JSON
+// file deviates hard from the API's conventions (verified against the real
+// 2026 file): camelCase field names, no ideCadastro (only numeroDeputadoID,
+// the portal's own id), amounts as strings ("1467"), dates with time
+// suffixes, and the parliamentarian's cpf populated on ~99.5% of rows — the
+// primary identity-link key.
 type bulkExpenseRow struct {
-	NomeParlamentar string      `json:"txNomeParlamentar"`
-	CPF             string      `json:"cpf"`
-	IDEcadastro     int64       `json:"ideCadastro"` // == the API's deputy id
-	NuDeputadoID    int64       `json:"nuDeputadoID"`
-	SgUF            string      `json:"sgUF"`
-	SgPartido       string      `json:"sgPartido"`
-	Descricao       string      `json:"txtDescricao"`
-	Fornecedor      string      `json:"txtFornecedor"`
-	CNPJCPF         string      `json:"txtCNPJCPF"`
-	Numero          string      `json:"txtNumero"`
-	DatEmissao      string      `json:"datEmissao"`
-	VlrDocumento    json.Number `json:"vlrDocumento"`
-	VlrGlosa        json.Number `json:"vlrGlosa"`
-	VlrLiquido      json.Number `json:"vlrLiquido"`
-	Mes             int         `json:"numMes"`
-	Ano             int         `json:"numAno"`
-	NumParcela      int         `json:"numParcela"`
-	IDEDocumento    int64       `json:"ideDocumento"`
-	URLDocumento    string      `json:"urlDocumento"`
+	NomeParlamentar  string      `json:"nomeParlamentar"`
+	CPF              string      `json:"cpf"`
+	NumeroDeputadoID int64       `json:"numeroDeputadoID"` // portal id, NOT the API id
+	SiglaUF          string      `json:"siglaUF"`
+	SiglaPartido     string      `json:"siglaPartido"`
+	Descricao        string      `json:"descricao"`
+	Fornecedor       string      `json:"fornecedor"`
+	CNPJCPF          string      `json:"cnpjCPF"`
+	Numero           string      `json:"numero"`
+	DataEmissao      string      `json:"dataEmissao"`
+	ValorDocumento   json.Number `json:"valorDocumento"`
+	ValorGlosa       json.Number `json:"valorGlosa"`
+	ValorLiquido     json.Number `json:"valorLiquido"`
+	Mes              int         `json:"mes"`
+	Ano              int         `json:"ano"`
+	Parcela          int         `json:"parcela"`
+	IDDocumento      int64       `json:"idDocumento"`
+	URLDocumento     string      `json:"urlDocumento"`
 }
 
 // FetchBulkExpenses downloads the CEAP bulk year file and invokes yield for
@@ -240,6 +203,16 @@ func (c *Client) FetchBulkExpenses(ctx context.Context, year int, yield func(Exp
 	if err != nil {
 		return fmt.Errorf("read bulk zip: %w", err)
 	}
+	if err := ParseBulkZip(body, yield); err != nil {
+		return fmt.Errorf("bulk %d: %w", year, err)
+	}
+	return nil
+}
+
+// ParseBulkZip decodes a CEAP bulk year zip (a single JSON entry wrapping the
+// rows in "dados"), normalizing and yielding each row. Streaming: rows are
+// yielded as decoded, so a year file never materializes as a slice.
+func ParseBulkZip(body []byte, yield func(Expense) error) error {
 	zr, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
 	if err != nil {
 		return fmt.Errorf("open bulk zip: %w", err)
@@ -268,14 +241,21 @@ func (c *Client) FetchBulkExpenses(ctx context.Context, year int, yield func(Exp
 		return fmt.Errorf("decode bulk array start: %w", err)
 	}
 	for dec.More() {
-		var row bulkExpenseRow
-		if err := dec.Decode(&row); err != nil {
+		// Two-step: keep the row's verbatim bytes for the raw layer, then
+		// normalize.
+		var raw json.RawMessage
+		if err := dec.Decode(&raw); err != nil {
 			return fmt.Errorf("decode bulk row: %w", err)
+		}
+		var row bulkExpenseRow
+		if err := json.Unmarshal(raw, &row); err != nil {
+			return fmt.Errorf("parse bulk row: %w", err)
 		}
 		exp, err := row.normalize()
 		if err != nil {
-			return fmt.Errorf("normalize bulk row (ideDocumento %d): %w", row.IDEDocumento, err)
+			return fmt.Errorf("normalize bulk row (idDocumento %d): %w", row.IDDocumento, err)
 		}
+		exp.Raw = raw
 		if err := yield(exp); err != nil {
 			return err
 		}
@@ -284,37 +264,38 @@ func (c *Client) FetchBulkExpenses(ctx context.Context, year int, yield func(Exp
 }
 
 func (r bulkExpenseRow) normalize() (Expense, error) {
-	doc, err := parseAmount(r.VlrDocumento)
+	doc, err := parseAmount(r.ValorDocumento)
 	if err != nil {
-		return Expense{}, fmt.Errorf("vlrDocumento: %w", err)
+		return Expense{}, fmt.Errorf("valorDocumento: %w", err)
 	}
-	glosa, err := parseAmount(r.VlrGlosa)
+	glosa, err := parseAmount(r.ValorGlosa)
 	if err != nil {
-		return Expense{}, fmt.Errorf("vlrGlosa: %w", err)
+		return Expense{}, fmt.Errorf("valorGlosa: %w", err)
 	}
-	liq, err := parseAmount(r.VlrLiquido)
+	liq, err := parseAmount(r.ValorLiquido)
 	if err != nil {
-		return Expense{}, fmt.Errorf("vlrLiquido: %w", err)
+		return Expense{}, fmt.Errorf("valorLiquido: %w", err)
 	}
 	return Expense{
-		DeputyID:       r.IDEcadastro, // the API's deputy id; 0 when absent
+		// The JSON bulk file has no ideCadastro/API id; CPF and name+UF are
+		// the identity keys.
 		DeputyCPF:      DigitsOnly(r.CPF),
 		DeputyName:     r.NomeParlamentar,
-		DeputyUF:       r.SgUF,
-		PartySigla:     r.SgPartido,
+		DeputyUF:       r.SiglaUF,
+		PartySigla:     r.SiglaPartido,
 		Category:       r.Descricao,
 		SupplierName:   r.Fornecedor,
 		SupplierTaxID:  DigitsOnly(r.CNPJCPF),
 		DocumentNumber: r.Numero,
-		IssuedAt:       dateOnly(r.DatEmissao),
+		IssuedAt:       dateOnly(r.DataEmissao),
 		Year:           r.Ano,
 		Month:          r.Mes,
-		Installment:    r.NumParcela,
+		Installment:    r.Parcela,
 		AmountDocument: doc,
 		AmountGlosa:    glosa,
 		AmountNet:      liq,
 		DocumentURL:    r.URLDocumento,
-		DocumentID:     int64OrEmpty(r.IDEDocumento),
+		DocumentID:     int64OrEmpty(r.IDDocumento),
 	}, nil
 }
 
@@ -330,16 +311,11 @@ func DigitsOnly(s string) string {
 	return b.String()
 }
 
-// parseAmount accepts JSON numbers and pt-BR formatted strings
-// ("1.234,56").
+// parseAmount parses the bulk file's string amounts ("1467", "100.5").
 func parseAmount(n json.Number) (float64, error) {
 	s := strings.TrimSpace(n.String())
 	if s == "" {
 		return 0, nil
-	}
-	if strings.Contains(s, ",") {
-		s = strings.ReplaceAll(s, ".", "")
-		s = strings.ReplaceAll(s, ",", ".")
 	}
 	v, err := strconv.ParseFloat(s, 64)
 	if err != nil {
