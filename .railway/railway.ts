@@ -9,7 +9,7 @@ import { defineRailway, postgres, preserve, project, service, volume } from "rai
 export default defineRailway(() => {
   const Postgres = postgres("Postgres", { region: "iad" });
   Postgres.networking = { privateNetworkEndpoint: "postgres" };
-  const postgresVolume = volume("postgres-volume", { alerts: { usage: { "100": {}, "80": {}, "95": {} } }, allowOnlineResize: true, region: "iad", sizeMB: 500 });
+  const postgresVolume = volume("postgres-volume", { alerts: { usage: { "100": {}, "80": {}, "95": {} } }, allowOnlineResize: true, region: "iad", sizeMB: 4096 });
 
   const api = service("api", {
     start: "/bin/api",
