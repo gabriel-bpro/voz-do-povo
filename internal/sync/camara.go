@@ -18,6 +18,9 @@ import (
 // an ever-growing log (the Postgres volume is the Hobby-plan constraint).
 const (
 	SourceCamaraDeputies = "camara-deputies"
+	// SourceCamaraCEAP identifies the promoted CEAP dataset (curated.expense
+	// rows with house='camara'); the API uses it as the provenance key.
+	SourceCamaraCEAP = "camara-ceap"
 	// SourceCamaraCEAPBulk is the prefix for the per-year bulk reconcile keys
 	// (e.g. "camara-ceap-bulk-2026"). The bulk files are updated daily and
 	// are the only working CEAP source: the API's despesas endpoint returns
