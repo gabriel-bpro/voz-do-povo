@@ -13,7 +13,7 @@ A web app to help people understand, investigate, and do diligence on the politi
 
 - Go: `go build ./...`, `go vet ./...`, `go test ./...`
 - Web: `cd web && npm run lint`, `npm run build`
-- Deploy: `hosting_provider up --service api|worker --detach` from repo root; `hosting_provider up ./web --path-as-root --service web --detach` for web
+- Deploy: `scripts/deploy.sh api|worker|web|all` (wraps `hosting_provider up` — api/worker build from the repo-root Dockerfile; web deploys `./web --path-as-root`)
 
 ## Tests — two agreed seams (see `.scratch/voz-do-povo-mvp/spec.md`)
 
