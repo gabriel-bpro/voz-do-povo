@@ -1,49 +1,69 @@
-// Walking-skeleton home: proves the DB → API → web thread by rendering the
-// database's own clock, served by the Go API. Real surfaces arrive with the
-// later tickets (13+).
+// Home: the citizen's entry point — the politician search bar front and
+// center plus the one-line project explainer (issue 13). Rankings arrive
+// with issue 16.
 
-function apiURL(): string {
-  const host = process.env.API_HOST ?? "localhost";
-  const port = process.env.API_PORT ?? "8080";
-  return `http://${host}:${port}`;
-}
+import Link from "next/link";
+import { searchPoliticians, type SearchResponse } from "@/lib/api";
+import { SourceLine } from "@/components/SourceLine";
 
-interface Health {
-  database: string;
-  serverTime: string;
-}
-
-async function getHealth(): Promise<Health | null> {
-  try {
-    const res = await fetch(`${apiURL()}/api/health`, { cache: "no-store" });
-    if (!res.ok) return null;
-    return (await res.json()) as Health;
-  } catch {
-    return null;
-  }
-}
-
-export default async function Home() {
-  const health = await getHealth();
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
+  const { q } = await searchParams;
+  const query = (q ?? "").trim();
+  const search: SearchResponse | null = query
+    ? await searchPoliticians(query)
+    : null;
 
   return (
-    <main>
-      <h1>Voz do Povo</h1>
-      <p>
-        Dados públicos sobre os políticos que você elegeu, explicados em
-        linguagem simples.
-      </p>
-      {health ? (
-        <p>
-          Banco de dados conectado — horário do servidor:{" "}
-          <time dateTime={health.serverTime}>
-            {new Date(health.serverTime).toLocaleString("pt-BR", {
-              timeZone: "UTC",
-            })}
-          </time>
+    <main className="wrap">
+      <header className="hero">
+        <h1>Voz do Povo</h1>
+        <p className="explainer-line">
+          Dados públicos sobre os políticos que você elegeu, explicados em
+          linguagem simples.
         </p>
-      ) : (
-        <p>API indisponível no momento.</p>
+        <form className="search-form" action="/" method="get">
+          <input
+            type="search"
+            name="q"
+            defaultValue={query}
+            placeholder="Buscar parlamentar por nome…"
+            aria-label="Buscar parlamentar por nome"
+            autoFocus
+          />
+        </form>
+      </header>
+
+      {search && (
+        <section className="card">
+          <div className="card-header">
+            <h2>Resultados</h2>
+            {search.sources[0] && <SourceLine source={search.sources[0]} />}
+          </div>
+          {search.results.length === 0 ? (
+            <p className="empty-note">
+              Nenhum parlamentar encontrado para “{search.query}”.
+            </p>
+          ) : (
+            search.results.map((r) => (
+              <Link
+                key={r.id}
+                href={`/politicos/${r.id}`}
+                className="result-row"
+              >
+                <span>{r.parliamentaryName}</span>
+                {r.uf && <span className="result-uf">{r.uf}</span>}
+              </Link>
+            ))
+          )}
+        </section>
+      )}
+
+      {query && !search && (
+        <p className="empty-note">API indisponível no momento.</p>
       )}
     </main>
   );

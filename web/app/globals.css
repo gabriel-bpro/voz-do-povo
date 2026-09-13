@@ -1,13 +1,17 @@
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* Design tokens + component classes locked by the plain-language report
+   prototype (.scratch/voz-do-povo-mvp/prototype/plain-language-report.html):
+   stat cards, big numbers, bars, inline tooltips, human-scale anchors. */
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root {
+  --ink: #1a2332;
+  --muted: #5b6779;
+  --line: #dde3ec;
+  --accent: #006b3f;
+  --accent-soft: #e6f4ec;
+  --warn: #b3261e;
+  --warn-soft: #fdeceb;
+  --bg: #f7f8fa;
+  --card: #ffffff;
 }
 
 html {
@@ -22,11 +26,16 @@ body {
 
 body {
   min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  font-size: 16px;
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -42,8 +51,223 @@ a {
   text-decoration: none;
 }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
-  }
+.wrap {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 32px 20px 64px;
+}
+
+/* --- cards + section headers --- */
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 20px;
+  margin-top: 24px;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.card-header h2 {
+  font-size: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.fonte {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* --- big numbers + anchors --- */
+
+.big-number {
+  font-size: 34px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.sub-line {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* --- explainer box + inline concept tooltips --- */
+
+.explainer {
+  background: var(--accent-soft);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 14px;
+  margin-top: 16px;
+}
+
+.tooltip {
+  border-bottom: 1px dotted var(--muted);
+  cursor: help;
+}
+
+/* --- monthly trend bars --- */
+
+.trend {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 64px;
+  margin-top: 20px;
+}
+
+.trend .trend-bar {
+  flex: 1;
+  background: var(--accent-soft);
+  border-radius: 4px 4px 0 0;
+  min-height: 2px;
+}
+
+.trend-labels {
+  display: flex;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.trend-labels span {
+  flex: 1;
+  text-align: center;
+}
+
+/* --- tables (largest items) --- */
+
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 16px;
+}
+
+table.data th,
+table.data td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  font-size: 14.5px;
+  text-align: left;
+}
+
+table.data th {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+table.data td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+td .item-sub {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* --- toggle pills (year selector) --- */
+
+.pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.pill {
+  padding: 6px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  font-size: 14px;
+}
+
+.pill.active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+/* --- home search --- */
+
+.hero {
+  text-align: center;
+  padding: 48px 0 24px;
+}
+
+.hero h1 {
+  font-size: 34px;
+}
+
+.hero .explainer-line {
+  color: var(--muted);
+  margin-top: 8px;
+}
+
+.search-form {
+  display: flex;
+  justify-content: center;
+  margin-top: 24px;
+}
+
+.search-form input {
+  width: min(480px, 100%);
+  padding: 12px 20px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 16px;
+  background: var(--card);
+  color: var(--ink);
+}
+
+.result-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.result-row:hover {
+  background: var(--accent-soft);
+  border-radius: 8px;
+}
+
+.result-row .result-uf {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.empty-note {
+  color: var(--muted);
+  text-align: center;
+  margin-top: 24px;
+}
+
+/* --- unlinked / degraded states --- */
+
+.not-linked {
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  color: var(--muted);
+  font-size: 14.5px;
+  margin-top: 12px;
 }

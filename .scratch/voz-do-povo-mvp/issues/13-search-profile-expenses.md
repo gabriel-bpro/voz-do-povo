@@ -6,11 +6,13 @@
 
 **Status:** ready-for-agent
 
-- [ ] Citizen can search politicians by name from the home page and reach a profile
-- [ ] Profile identity header renders a templated plain-language summary (no LLM, no free prose)
-- [ ] Expenses section shows current-year total, term-year selector back to 2023, monthly trend, and largest items
-- [ ] Every dataset section displays its source name and last sync date
-- [ ] An unlinked source renders the explicit "not linked" state rather than fabricating or hiding
-- [ ] Style matches the locked prototype: stat cards, big numbers, bars, inline tooltips, human-scale anchors
-- [ ] API responses for search and profile carry source + sync-date metadata
-- [ ] HTTP-API-seam tests cover search, profile expenses payload, and the unlinked-state response
+- [x] Citizen can search politicians by name from the home page and reach a profile
+- [x] Profile identity header renders a templated plain-language summary (no LLM, no free prose)
+- [x] Expenses section shows current-year total, term-year selector back to 2023, monthly trend, and largest items
+- [x] Every dataset section displays its source name and last sync date
+- [x] An unlinked source renders the explicit "not linked" state rather than fabricating or hiding
+- [x] Style matches the locked prototype: stat cards, big numbers, bars, inline tooltips, human-scale anchors
+- [x] API responses for search and profile carry source + sync-date metadata
+- [x] HTTP-API-seam tests cover search, profile expenses payload, and the unlinked-state response
+
+**Done 2026-09-13.** Deferred: the profile header's flagged-items rollup count (spec) waits on the badge rules (issues 14/18) — no flags exist to count yet. The year selector covers the full term (2023+), even years with zero expenses. Registry freshness is derived from curated `politician` timestamps (the app never reads raw).

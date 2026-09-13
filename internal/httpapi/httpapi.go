@@ -9,8 +9,14 @@ import (
 	"time"
 )
 
+// server carries the API's dependencies (today: just the curated-layer DB).
+type server struct {
+	db *sql.DB
+}
+
 // New returns the API's HTTP handler rooted at the given database.
 func New(db *sql.DB) http.Handler {
+	s := &server{db: db}
 	mux := http.NewServeMux()
 
 	// Liveness only — no database touch.
@@ -30,6 +36,9 @@ func New(db *sql.DB) http.Handler {
 			"serverTime": now.UTC().Format(time.RFC3339),
 		})
 	})
+
+	mux.HandleFunc("GET /api/politicians/search", s.handleSearch)
+	mux.HandleFunc("GET /api/politicians/{id}", s.handleProfile)
 
 	return mux
 }
