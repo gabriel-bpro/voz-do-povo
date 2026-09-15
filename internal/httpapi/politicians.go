@@ -163,6 +163,27 @@ func profileSummary(p politicianView) string {
 	return fmt.Sprintf("%s é deputado(a) federal%s, no mandato 2023–2026.", p.ParliamentaryName, where)
 }
 
+// Attention-badge rule 1 (issue 14): an expense item badges when its net
+// amount is above the median of its bucket — house × expense category over
+// the trailing 12 months — and at least R$ 1.000. Buckets with fewer than
+// 30 items never badge; negative values (glosas/ressarcimentos) are excluded
+// from both the median sample and the badge (the floor already bars them).
+// Medians are computed on demand over the curated layer.
+const (
+	badgeMinAmount   = 1000.0
+	badgeMinBucketN  = 30
+	medianBucketsCTE = `
+		WITH buckets AS (
+			SELECT house, category,
+			       COUNT(*) AS n,
+			       percentile_cont(0.5) WITHIN GROUP (ORDER BY amount_net::float8) AS median
+			FROM curated.expense
+			WHERE amount_net >= 0
+			  AND issued_at >= (CURRENT_DATE - INTERVAL '12 months')::date
+			GROUP BY house, category
+		)`
+)
+
 // expenseSection builds the profile's expenses block. When the politician has
 // no Câmara link and no linked expenses, it returns the honest "not linked"
 // state instead of fabricating numbers or hiding the section.
@@ -220,31 +241,56 @@ func (s *server) expenseSection(ctx context.Context, politicianID int64, year in
 		}
 	}
 
+	// The badge carries the bare bucket median (never a multiplier): the
+	// frontend renders the locked neutral copy from category + median.
+	type badge struct {
+		Median float64 `json:"median"`
+	}
 	type item struct {
 		Category     string  `json:"category"`
 		SupplierName *string `json:"supplierName"`
 		IssuedAt     *string `json:"issuedAt"`
 		AmountNet    float64 `json:"amountNet"`
 		DocumentURL  *string `json:"documentUrl"`
+		Badge        *badge  `json:"badge,omitempty"`
 	}
 	items := []item{}
-	itemRows, err := s.db.QueryContext(ctx, `
-		SELECT category, supplier_name, to_char(issued_at, 'YYYY-MM-DD'),
-		       amount_net::float8, document_url
-		FROM curated.expense
-		WHERE politician_id = $1 AND year = $2
-		ORDER BY amount_net DESC
-		LIMIT 10`, politicianID, year)
+	itemRows, err := s.db.QueryContext(ctx, medianBucketsCTE+`
+		SELECT e.category, e.supplier_name, to_char(e.issued_at, 'YYYY-MM-DD'),
+		       e.amount_net::float8, e.document_url,
+		       CASE WHEN b.n >= $3 AND e.amount_net >= $4 AND e.amount_net > b.median
+		            THEN b.median END AS badge_median
+		FROM curated.expense e
+		LEFT JOIN buckets b ON b.house = e.house AND b.category = e.category
+		WHERE e.politician_id = $1 AND e.year = $2
+		ORDER BY e.amount_net DESC
+		LIMIT 10`, politicianID, year, badgeMinBucketN, badgeMinAmount)
 	if err != nil {
 		log.Printf("profile %d largest items: %v", politicianID, err)
 	} else {
 		defer itemRows.Close()
 		for itemRows.Next() {
 			var it item
-			if itemRows.Scan(&it.Category, &it.SupplierName, &it.IssuedAt, &it.AmountNet, &it.DocumentURL) == nil {
+			var badgeMedian sql.NullFloat64
+			if itemRows.Scan(&it.Category, &it.SupplierName, &it.IssuedAt, &it.AmountNet, &it.DocumentURL, &badgeMedian) == nil {
+				if badgeMedian.Valid {
+					it.Badge = &badge{Median: badgeMedian.Float64}
+				}
 				items = append(items, it)
 			}
 		}
+	}
+
+	// Header rollup: how many of the year's expenses trip the badge rule.
+	var flaggedCount int
+	if err := s.db.QueryRowContext(ctx, medianBucketsCTE+`
+		SELECT COUNT(*)
+		FROM curated.expense e
+		JOIN buckets b ON b.house = e.house AND b.category = e.category
+		WHERE e.politician_id = $1 AND e.year = $2
+		  AND b.n >= $3 AND e.amount_net >= $4 AND e.amount_net > b.median`,
+		politicianID, year, badgeMinBucketN, badgeMinAmount).Scan(&flaggedCount); err != nil {
+		log.Printf("profile %d flagged count: %v", politicianID, err)
 	}
 
 	// The selector covers the whole current term (2023+), even years without
@@ -261,6 +307,7 @@ func (s *server) expenseSection(ctx context.Context, politicianID int64, year in
 		"total":          total,
 		"monthly":        monthly,
 		"largestItems":   items,
+		"flaggedCount":   flaggedCount,
 		"source":         source,
 	}
 }

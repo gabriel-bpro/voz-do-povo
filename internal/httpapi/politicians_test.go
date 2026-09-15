@@ -1,8 +1,10 @@
 package httpapi_test
 
 import (
+	"database/sql"
 	"fmt"
 	"net/http"
+	"net/url"
 	"testing"
 	"time"
 )
@@ -121,9 +123,9 @@ func TestProfileExpensesPayload(t *testing.T) {
 			SyncedAt *string `json:"syncedAt"`
 		} `json:"sources"`
 		Expenses struct {
-			Linked         bool   `json:"linked"`
-			Year           int    `json:"year"`
-			AvailableYears []int  `json:"availableYears"`
+			Linked         bool    `json:"linked"`
+			Year           int     `json:"year"`
+			AvailableYears []int   `json:"availableYears"`
 			Total          float64 `json:"total"`
 			Monthly        []struct {
 				Month int     `json:"month"`
@@ -252,4 +254,215 @@ func TestProfileRejectsYearBeforeTerm(t *testing.T) {
 	res := getJSON(t, srv.URL+"/api/politicians/7?year=2019")
 	defer res.Body.Close()
 	mustStatus(t, res, http.StatusBadRequest)
+}
+
+// --- attention badge (rule 1: above bucket median) --------------------------
+
+// seedBucketExpenses fills a house×category bucket with n items of the same
+// amount, issued last month (safely inside the trailing-12-month window).
+// Rows stay unlinked (politician_id NULL): buckets span the whole house,
+// linked or not. The supplier name carries the amount so repeated calls for
+// one category never collide on the dedup key.
+func seedBucketExpenses(t *testing.T, db *sql.DB, category string, amount float64, n int) {
+	t.Helper()
+	base := time.Now().AddDate(0, -1, 0)
+	for i := 0; i < n; i++ {
+		d := base.AddDate(0, 0, -(i % 25))
+		supplier := fmt.Sprintf("Fornecedor %s %v %02d", category, amount, i)
+		_, err := db.Exec(`
+			INSERT INTO curated.expense (
+				politician_id, house, category, supplier_name, issued_at,
+				year, month, amount_net, source_row_key
+			) VALUES (NULL,'camara',$1,$2,$3,$4,$5,$6,$7)`,
+			category, supplier, d.Format("2006-01-02"),
+			d.Year(), int(d.Month()), amount,
+			url.QueryEscape(supplier)+d.Format("2006-01-02"))
+		if err != nil {
+			t.Fatalf("seed bucket expense (%s/%v/%d): %v", category, amount, i, err)
+		}
+	}
+}
+
+type badgeItem struct {
+	Category  string  `json:"category"`
+	AmountNet float64 `json:"amountNet"`
+	Badge     *struct {
+		Median float64 `json:"median"`
+	} `json:"badge"`
+}
+
+func getExpenses(t *testing.T, srvURL string, id int64) struct {
+	Linked       bool        `json:"linked"`
+	FlaggedCount int         `json:"flaggedCount"`
+	LargestItems []badgeItem `json:"largestItems"`
+} {
+	t.Helper()
+	res := getJSON(t, fmt.Sprintf("%s/api/politicians/%d", srvURL, id))
+	defer res.Body.Close()
+	mustStatus(t, res, http.StatusOK)
+	var body struct {
+		Expenses struct {
+			Linked       bool        `json:"linked"`
+			FlaggedCount int         `json:"flaggedCount"`
+			LargestItems []badgeItem `json:"largestItems"`
+		} `json:"expenses"`
+	}
+	mustDecode(t, res, &body)
+	return body.Expenses
+}
+
+func findItem(t *testing.T, items []badgeItem, amount float64) badgeItem {
+	t.Helper()
+	for _, it := range items {
+		if it.AmountNet == amount {
+			return it
+		}
+	}
+	t.Fatalf("no expense item with amount %v in %+v", amount, items)
+	return badgeItem{}
+}
+
+func TestBadgeTripsAboveMedian(t *testing.T) {
+	db, srv := newSeededAPI(t)
+	seedPolitician(t, db, 7, "Carlos Pereira Souza", "Carlos Souza", "MG", "55566677788")
+	seedSourceID(t, db, 7, "camara", "204402")
+
+	// Bucket: 30 items at R$ 100 → median 100.
+	seedBucketExpenses(t, db, "Consultoria jurídica", 100.00, 30)
+
+	now := time.Now()
+	at := now.Format("2006-01-02")
+	seedExpense(t, db, 7, nil, now.Year(), int(now.Month()), "Consultoria jurídica", "Alvo Grande", at, 5000.00)
+	seedExpense(t, db, 7, nil, now.Year(), int(now.Month()), "Consultoria jurídica", "Alvo Médio", at, 3000.00)
+	// Below the R$ 1.000 floor: above the median but never badges.
+	seedExpense(t, db, 7, nil, now.Year(), int(now.Month()), "Consultoria jurídica", "Alvo Pequeno", at, 500.00)
+
+	exp := getExpenses(t, srv.URL, 7)
+
+	for _, amount := range []float64{5000.00, 3000.00} {
+		it := findItem(t, exp.LargestItems, amount)
+		if it.Badge == nil {
+			t.Errorf("item %v: badge absent, want median 100", amount)
+		} else if it.Badge.Median != 100.00 {
+			t.Errorf("item %v: badge median = %v, want 100", amount, it.Badge.Median)
+		}
+	}
+	if it := findItem(t, exp.LargestItems, 500.00); it.Badge != nil {
+		t.Errorf("item 500 (below floor): badge = %+v, want absent", it.Badge)
+	}
+	if exp.FlaggedCount != 2 {
+		t.Errorf("flaggedCount = %d, want 2", exp.FlaggedCount)
+	}
+}
+
+func TestBadgeRespectsThousandFloor(t *testing.T) {
+	db, srv := newSeededAPI(t)
+	seedPolitician(t, db, 7, "Carlos Pereira Souza", "Carlos Souza", "MG", "55566677788")
+	seedSourceID(t, db, 7, "camara", "204402")
+
+	seedBucketExpenses(t, db, "Passagens espaciais", 100.00, 30)
+
+	now := time.Now()
+	at := now.Format("2006-01-02")
+	seedExpense(t, db, 7, nil, now.Year(), int(now.Month()), "Passagens espaciais", "Sob o Piso", at, 999.99)
+	// Exactly R$ 1.000 is >= the floor: badges.
+	seedExpense(t, db, 7, nil, now.Year(), int(now.Month()), "Passagens espaciais", "No Piso", at, 1000.00)
+
+	exp := getExpenses(t, srv.URL, 7)
+
+	if it := findItem(t, exp.LargestItems, 999.99); it.Badge != nil {
+		t.Errorf("item 999.99: badge = %+v, want absent (below floor)", it.Badge)
+	}
+	if it := findItem(t, exp.LargestItems, 1000.00); it.Badge == nil {
+		t.Errorf("item 1000.00: badge absent, want present (floor is inclusive)")
+	}
+	if exp.FlaggedCount != 1 {
+		t.Errorf("flaggedCount = %d, want 1", exp.FlaggedCount)
+	}
+}
+
+func TestBadgeRequiresThirtyItemBucket(t *testing.T) {
+	db, srv := newSeededAPI(t)
+	seedPolitician(t, db, 7, "Carlos Pereira Souza", "Carlos Souza", "MG", "55566677788")
+	seedSourceID(t, db, 7, "camara", "204402")
+
+	// One short of the minimum (28 donor + the target item = 29): the
+	// bucket never badges.
+	seedBucketExpenses(t, db, "Teletransporte", 100.00, 28)
+
+	now := time.Now()
+	seedExpense(t, db, 7, nil, now.Year(), int(now.Month()), "Teletransporte", "Caro Demais", now.Format("2006-01-02"), 5000.00)
+
+	exp := getExpenses(t, srv.URL, 7)
+
+	if it := findItem(t, exp.LargestItems, 5000.00); it.Badge != nil {
+		t.Errorf("item 5000: badge = %+v, want absent (bucket has 29 items)", it.Badge)
+	}
+	if exp.FlaggedCount != 0 {
+		t.Errorf("flaggedCount = %d, want 0", exp.FlaggedCount)
+	}
+}
+
+func TestBadgeExcludesNegativesFromMedian(t *testing.T) {
+	db, srv := newSeededAPI(t)
+	seedPolitician(t, db, 7, "Carlos Pereira Souza", "Carlos Souza", "MG", "55566677788")
+	seedSourceID(t, db, 7, "camara", "204402")
+
+	// Positives: 15×100 + 15×200, plus the target item (1200) → 31 values,
+	// median = 200 (16th of 31). Glosas/ressarcimentos must not drag the
+	// median down: wrongly including the 20 negatives would give 100.
+	seedBucketExpenses(t, db, "Holograma de campanha", 100.00, 15)
+	seedBucketExpenses(t, db, "Holograma de campanha", 200.00, 15)
+	seedBucketExpenses(t, db, "Holograma de campanha", -9999.00, 20)
+
+	now := time.Now()
+	at := now.Format("2006-01-02")
+	seedExpense(t, db, 7, nil, now.Year(), int(now.Month()), "Holograma de campanha", "Acima", at, 1200.00)
+	// Negative items never badge, however large in magnitude.
+	seedExpense(t, db, 7, nil, now.Year(), int(now.Month()), "Holograma de campanha", "Glosa Grande", at, -5000.00)
+
+	exp := getExpenses(t, srv.URL, 7)
+
+	it := findItem(t, exp.LargestItems, 1200.00)
+	if it.Badge == nil {
+		t.Fatalf("item 1200: badge absent, want median 200")
+	}
+	if it.Badge.Median != 200.00 {
+		t.Errorf("badge median = %v, want 200 (negatives excluded from the sample)", it.Badge.Median)
+	}
+	for _, other := range exp.LargestItems {
+		if other.AmountNet < 0 && other.Badge != nil {
+			t.Errorf("negative item %v: badge = %+v, want absent", other.AmountNet, other.Badge)
+		}
+	}
+	if exp.FlaggedCount != 1 {
+		t.Errorf("flaggedCount = %d, want 1", exp.FlaggedCount)
+	}
+}
+
+func TestBadgeIgnoresItemsOutsideTrailingWindow(t *testing.T) {
+	db, srv := newSeededAPI(t)
+	seedPolitician(t, db, 7, "Carlos Pereira Souza", "Carlos Souza", "MG", "55566677788")
+	seedSourceID(t, db, 7, "camara", "204402")
+
+	// 28 recent + 5 ancient (13 months out) + the target item: the window
+	// keeps the bucket at 29 — no badge. Without the window filter, n = 34
+	// and the item would badge.
+	seedBucketExpenses(t, db, "Máquina do tempo", 100.00, 28)
+	seedPolitician(t, db, 8, "Doador de Balde", "Doador Balde", "SP", "11100011100")
+	old := time.Now().AddDate(0, -13, 0)
+	for i := 0; i < 5; i++ {
+		d := old.AddDate(0, 0, -i)
+		seedExpense(t, db, 8, nil, d.Year(), int(d.Month()),
+			"Máquina do tempo", fmt.Sprintf("Antigo %02d", i), d.Format("2006-01-02"), 100.00)
+	}
+
+	now := time.Now()
+	seedExpense(t, db, 7, nil, now.Year(), int(now.Month()), "Máquina do tempo", "Caro Demais", now.Format("2006-01-02"), 5000.00)
+
+	exp := getExpenses(t, srv.URL, 7)
+
+	if it := findItem(t, exp.LargestItems, 5000.00); it.Badge != nil {
+		t.Errorf("item 5000: badge = %+v, want absent (window excludes 13-month-old items)", it.Badge)
+	}
 }

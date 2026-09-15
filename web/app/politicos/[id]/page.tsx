@@ -62,9 +62,18 @@ function Profile({ profile }: { profile: ProfileResponse }) {
           </p>
         )}
         <p style={{ marginTop: 14 }}>{summary}</p>
+        {expenses.linked && expenses.flaggedCount > 0 && (
+          <p className="rollup-attention">
+            <a href="#gastos">
+              {expenses.flaggedCount === 1
+                ? "1 despesa chama atenção"
+                : `${expenses.flaggedCount} despesas chamam atenção`}
+            </a>
+          </p>
+        )}
       </header>
 
-      <section className="card">
+      <section className="card" id="gastos">
         <div className="card-header">
           <h2>
             Gastos {expenses.linked ? expenses.year : ""} ·{" "}
@@ -164,6 +173,12 @@ function Expenses({
                 <div className="item-sub">
                   {[it.supplierName, it.issuedAt].filter(Boolean).join(" · ")}
                 </div>
+                {it.badge && (
+                  <div className="badge-attention">
+                    Chama atenção · Acima da mediana da categoria &quot;
+                    {it.category}&quot; (mediana: {brlCents.format(it.badge.median)})
+                  </div>
+                )}
               </td>
               <td className="num">{brlCents.format(it.amountNet)}</td>
             </tr>
