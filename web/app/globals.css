@@ -181,6 +181,28 @@ td .item-sub {
   color: var(--muted);
 }
 
+/* --- attention badges (rule 1: above the bucket median) --- */
+
+.badge-attention {
+  display: inline-block;
+  background: var(--warn-soft);
+  color: var(--warn);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.rollup-attention {
+  margin-top: 12px;
+  font-size: 14px;
+}
+
+.rollup-attention a {
+  color: var(--warn);
+  border-bottom: 1px dotted var(--warn);
+}
+
 /* --- toggle pills (year selector) --- */
 
 .pills {

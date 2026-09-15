@@ -67,7 +67,7 @@ An **attention badge** ("chama atenção") marks items that trip one of three fi
 
 ### Topology & stack
 
-- **Railway, 4 units**: Next.js web service, **Go API service**, **Go worker service** (same Go codebase as the API, deployed separately, per-source internal schedulers), Railway Postgres. (Backend switched from Nest to Go on 2026-09-03.)
+- **Railway, 4 units**: Next.js web service, **Go API service**, **Go worker service** (same Go codebase as the API, deployed separately, one-shot sync run on a Railway cron schedule), Railway Postgres. (Backend switched from Nest to Go on 2026-09-03.)
 - **Private networking between services is mandatory** — public TCP proxy egress is billed.
 - Hobby plan assumed; **5GB Postgres volume cap is the known Pro-trigger** (crossing forces the $20/mo plan, not higher usage pricing). Shallow history keeps the store in the low GB range.
 

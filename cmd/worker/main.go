@@ -1,5 +1,7 @@
-// Worker service: runs the mirror's syncs on their per-source schedules.
-// Sync failures are logs only — the app always renders the last good sync.
+// Worker service: one-shot run of the mirror's syncs, fired daily by a
+// Railway cron schedule. Sync failures are logs only for the app — it
+// always renders the last good sync — but a failed sync exits non-zero so
+// the cron run shows as failed.
 package main
 
 import (
@@ -62,55 +64,50 @@ func main() {
 	// CEAP cadence: the bulk year files are updated daily and are the only
 	// working CEAP source (the API's despesas endpoint returns empty for
 	// every deputy — verified 2026-09-08), so the current-year bulk re-ingest
-	// runs daily and doubles as the delta.
+	// runs daily and doubles as the delta. Railway fires this process on a
+	// daily cron schedule; each run executes every sync once and exits.
 	jobs := []job{
-		{"camara-registry", 24 * time.Hour, func(ctx context.Context) error {
+		{"camara-registry", func(ctx context.Context) error {
 			return syncCamaraRegistry(ctx, db, client)
 		}},
-		{"camara-expenses-bulk", 24 * time.Hour, func(ctx context.Context) error {
+		{"camara-expenses-bulk", func(ctx context.Context) error {
 			return syncCamaraBulk(ctx, db, client, time.Now().Year())
 		}},
 	}
 
+	failed := false
 	for _, j := range jobs {
-		go j.runLoop(ctx)
-	}
-
-	log.Printf("worker started; %d sync jobs scheduled", len(jobs))
-	<-ctx.Done()
-	log.Printf("worker stopped")
-}
-
-// job is a scheduled sync. It runs once at startup, then every interval;
-// panics and errors are logged, never fatal (logs-only failure policy).
-type job struct {
-	name  string
-	every time.Duration
-	run   func(ctx context.Context) error
-}
-
-func (j job) runLoop(ctx context.Context) {
-	for {
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("sync %s panicked: %v", j.name, r)
-				}
-			}()
-			start := time.Now()
-			if err := j.run(ctx); err != nil {
-				log.Printf("sync %s failed after %s: %v", j.name, time.Since(start).Round(time.Second), err)
-			} else {
-				log.Printf("sync %s ok in %s", j.name, time.Since(start).Round(time.Second))
-			}
-		}()
-
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(j.every):
+		if err := j.runOnce(ctx); err != nil {
+			failed = true
 		}
 	}
+	if failed {
+		os.Exit(1)
+	}
+}
+
+// job is a named sync. Errors and panics are logged (the app always renders
+// the last good sync), but a failed job makes the run exit non-zero so the
+// failure is visible in the cron run status.
+type job struct {
+	name string
+	run  func(ctx context.Context) error
+}
+
+func (j job) runOnce(ctx context.Context) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("sync %s panicked: %v", j.name, r)
+			err = fmt.Errorf("panic: %v", r)
+		}
+	}()
+	start := time.Now()
+	if err := j.run(ctx); err != nil {
+		log.Printf("sync %s failed after %s: %v", j.name, time.Since(start).Round(time.Second), err)
+		return err
+	}
+	log.Printf("sync %s ok in %s", j.name, time.Since(start).Round(time.Second))
+	return nil
 }
 
 // syncCamaraRegistry refreshes the deputy registry: list both legislatures,

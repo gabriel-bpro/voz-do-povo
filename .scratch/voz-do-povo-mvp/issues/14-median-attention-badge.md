@@ -6,8 +6,8 @@
 
 **Status:** ready-for-agent
 
-- [ ] Expense items above their house × category trailing-12-month median and ≥ R$ 1.000 carry the badge field
-- [ ] Buckets with < 30 items produce no badges; negative-value items are excluded from medians and badges
-- [ ] Badge renders inline with the exact neutral copy (category name + median value), no editorializing
-- [ ] Profile header shows the flagged-expenses rollup count linking to the expenses section
-- [ ] HTTP-API-seam tests cover: badge tripping, the R$ 1.000 floor, the 30-item bucket minimum, and negative-value exclusion
+- [x] Expense items above their house × category trailing-12-month median and ≥ R$ 1.000 carry the badge field
+- [x] Buckets with < 30 items produce no badges; negative-value items are excluded from medians and badges
+- [x] Badge renders inline with the exact neutral copy (category name + median value), no editorializing
+- [x] Profile header shows the flagged-expenses rollup count linking to the expenses section
+- [x] HTTP-API-seam tests cover: badge tripping, the R$ 1.000 floor, the 30-item bucket minimum, and negative-value exclusion

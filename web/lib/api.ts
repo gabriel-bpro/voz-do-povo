@@ -40,6 +40,10 @@ export interface ExpenseItem {
   issuedAt: string | null;
   amountNet: number;
   documentUrl: string | null;
+  // Attention badge (rule 1): present only when the item sits above its
+  // bucket's trailing-12-month median; carries the bare median, never a
+  // multiplier.
+  badge?: { median: number };
 }
 
 export interface ExpensesLinked {
@@ -49,6 +53,8 @@ export interface ExpensesLinked {
   total: number;
   monthly: { month: number; total: number }[];
   largestItems: ExpenseItem[];
+  // Header rollup: how many of the year's expenses carry the badge.
+  flaggedCount: number;
   source: SourceMeta;
 }
 
