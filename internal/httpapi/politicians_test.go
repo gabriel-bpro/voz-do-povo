@@ -246,6 +246,107 @@ func TestProfileUnknownPolitician(t *testing.T) {
 	mustStatus(t, res, http.StatusNotFound)
 }
 
+// Seam 1, Senado: a senator profile serves CEAPS data — senador(a) summary
+// template, CEAPS source block, and aggregates scoped to house='senado' (a
+// same-politician CEAP row from a past mandate is never mixed in).
+func TestProfileSenatorExpensesPayload(t *testing.T) {
+	db, srv := newSeededAPI(t)
+	seedPolitician(t, db, 11, "Ana Mostra Souza", "Ana Mostra", "MG", "77766655544")
+	seedSourceID(t, db, 11, "senado", "9002")
+	partyID := seedPartyRow(t, db, "PSDB")
+
+	thisYear := time.Now().Year()
+	at := fmt.Sprintf("%d-03-04", thisYear)
+	seedExpenseHouse(t, db, "senado", 11, &partyID, thisYear, 3, "Passagens aéreas, aquáticas e terrestres nacionais", "Aerotur", at, 1315.35)
+	// A CEAP row from the same canonical person's past: excluded from the
+	// senator view (quotas never mix).
+	seedExpenseHouse(t, db, "camara", 11, &partyID, thisYear, 3, "Combustíveis e lubrificantes", "Posto", at, 900.00)
+
+	res := getJSON(t, fmt.Sprintf("%s/api/politicians/11?year=%d", srv.URL, thisYear))
+	defer res.Body.Close()
+	mustStatus(t, res, http.StatusOK)
+
+	var body struct {
+		Summary string `json:"summary"`
+		Sources []struct {
+			Key  string `json:"key"`
+			Name string `json:"name"`
+		} `json:"sources"`
+		Expenses struct {
+			Linked       bool    `json:"linked"`
+			Total        float64 `json:"total"`
+			LargestItems []struct {
+				Category  string  `json:"category"`
+				AmountNet float64 `json:"amountNet"`
+			} `json:"largestItems"`
+			Source struct {
+				Key      string  `json:"key"`
+				Name     string  `json:"name"`
+				SyncedAt *string `json:"syncedAt"`
+			} `json:"source"`
+		} `json:"expenses"`
+	}
+	mustDecode(t, res, &body)
+
+	if body.Summary != "Ana Mostra é senador(a) da República por MG (PSDB)." {
+		t.Errorf("summary = %q, want exact pt-BR senador(a) template", body.Summary)
+	}
+	if !body.Expenses.Linked {
+		t.Fatalf("expenses.linked = false, want true (senado source id)")
+	}
+	if body.Expenses.Total != 1315.35 {
+		t.Errorf("total = %v, want 1315.35 (CEAP row excluded)", body.Expenses.Total)
+	}
+	if len(body.Expenses.LargestItems) != 1 {
+		t.Errorf("largestItems = %+v, want only the CEAPS row", body.Expenses.LargestItems)
+	}
+	if body.Expenses.Source.Key != "senado-ceaps" || body.Expenses.Source.Name == "" {
+		t.Errorf("expenses source = %+v, want the CEAPS block", body.Expenses.Source)
+	}
+	if body.Expenses.Source.SyncedAt == nil {
+		t.Errorf("expenses source missing sync date")
+	}
+	if len(body.Sources) != 1 || body.Sources[0].Key != "senado-senators" {
+		t.Errorf("profile sources = %+v, want the senado registry block", body.Sources)
+	}
+}
+
+// Seam 1, Senado: the median badge compares against the SENADO bucket only —
+// a cheap Câmara bucket of the same category must not make a senator's item
+// badge.
+func TestBadgeBucketsArePerHouse(t *testing.T) {
+	db, srv := newSeededAPI(t)
+	seedPolitician(t, db, 11, "Ana Mostra Souza", "Ana Mostra", "MG", "77766655544")
+	seedSourceID(t, db, 11, "senado", "9002")
+
+	// Same category label in both houses: Câmara median 100, Senado median
+	// 5000. Cross-house mixing would badge the 3000 item; per-house it must
+	// not.
+	seedBucketExpensesHouse(t, db, "camara", "Passagens", 100.00, 30)
+	seedBucketExpensesHouse(t, db, "senado", "Passagens", 5000.00, 30)
+
+	now := time.Now()
+	at := now.Format("2006-01-02")
+	seedExpenseHouse(t, db, "senado", 11, nil, now.Year(), int(now.Month()), "Passagens", "Sob a Mediana", at, 3000.00)
+	seedExpenseHouse(t, db, "senado", 11, nil, now.Year(), int(now.Month()), "Passagens", "Acima da Mediana", at, 6000.00)
+
+	exp := getExpenses(t, srv.URL, 11)
+
+	if it := findItem(t, exp.LargestItems, 3000.00); it.Badge != nil {
+		t.Errorf("item 3000: badge = %+v, want absent (senado bucket median is 5000)", it.Badge)
+	}
+	it := findItem(t, exp.LargestItems, 6000.00)
+	if it.Badge == nil {
+		t.Fatalf("item 6000: badge absent, want median 5000 (senado bucket)")
+	}
+	if it.Badge.Median != 5000.00 {
+		t.Errorf("item 6000: badge median = %v, want 5000 (senado bucket)", it.Badge.Median)
+	}
+	if exp.FlaggedCount != 1 {
+		t.Errorf("flaggedCount = %d, want 1", exp.FlaggedCount)
+	}
+}
+
 func TestProfileRejectsYearBeforeTerm(t *testing.T) {
 	db, srv := newSeededAPI(t)
 	seedPolitician(t, db, 7, "Carlos Pereira Souza", "Carlos Souza", "MG", "55566677788")
@@ -265,6 +366,12 @@ func TestProfileRejectsYearBeforeTerm(t *testing.T) {
 // one category never collide on the dedup key.
 func seedBucketExpenses(t *testing.T, db *sql.DB, category string, amount float64, n int) {
 	t.Helper()
+	seedBucketExpensesHouse(t, db, "camara", category, amount, n)
+}
+
+// seedBucketExpensesHouse is seedBucketExpenses for a given house.
+func seedBucketExpensesHouse(t *testing.T, db *sql.DB, house, category string, amount float64, n int) {
+	t.Helper()
 	base := time.Now().AddDate(0, -1, 0)
 	for i := 0; i < n; i++ {
 		d := base.AddDate(0, 0, -(i % 25))
@@ -273,12 +380,12 @@ func seedBucketExpenses(t *testing.T, db *sql.DB, category string, amount float6
 			INSERT INTO curated.expense (
 				politician_id, house, category, supplier_name, issued_at,
 				year, month, amount_net, source_row_key
-			) VALUES (NULL,'camara',$1,$2,$3,$4,$5,$6,$7)`,
-			category, supplier, d.Format("2006-01-02"),
+			) VALUES (NULL,$1,$2,$3,$4,$5,$6,$7,$8)`,
+			house, category, supplier, d.Format("2006-01-02"),
 			d.Year(), int(d.Month()), amount,
-			url.QueryEscape(supplier)+d.Format("2006-01-02"))
+			house+url.QueryEscape(supplier)+d.Format("2006-01-02"))
 		if err != nil {
-			t.Fatalf("seed bucket expense (%s/%v/%d): %v", category, amount, i, err)
+			t.Fatalf("seed bucket expense (%s/%s/%v/%d): %v", house, category, amount, i, err)
 		}
 	}
 }

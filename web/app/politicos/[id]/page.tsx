@@ -79,7 +79,7 @@ function Profile({ profile }: { profile: ProfileResponse }) {
             Gastos {expenses.linked ? expenses.year : ""} ·{" "}
             <span
               className="tooltip"
-              title="Cota parlamentar: verba que cada deputado(a) recebe para custear o trabalho do mandato — passagens, escritório, divulgação."
+              title="Cota parlamentar: verba que cada parlamentar recebe para custear o trabalho do mandato — passagens, escritório, divulgação."
             >
               cota parlamentar
             </span>
@@ -120,7 +120,7 @@ function Expenses({
       )}
 
       <div className="explainer">
-        ℹ️ A cota parlamentar é o dinheiro que cada deputado(a) recebe para
+        ℹ️ A cota parlamentar é o dinheiro que cada parlamentar recebe para
         custear o mandato: passagens, escritório, divulgação. Valores aqui são
         os líquidos — já descontadas as glosas (valores devolvidos ou
         desautorizados).

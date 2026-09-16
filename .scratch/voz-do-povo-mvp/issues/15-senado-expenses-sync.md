@@ -6,8 +6,15 @@
 
 **Status:** ready-for-agent
 
-- [ ] Senators registry syncs into curated with Senado source ids
-- [ ] CEAPS expenses sync daily into the unified expense table
-- [ ] A politician present in both houses resolves to one canonical politician (exact-CPF auto-link or review queue)
-- [ ] Profile expenses section and median badge serve Senado data correctly, per-house buckets intact
-- [ ] Sync-seam tests cover CEAPS fixture → curated state, including a cross-house identity-link case
+- [x] Senators registry syncs into curated with Senado source ids
+- [x] CEAPS expenses sync daily into the unified expense table
+- [x] A politician present in both houses resolves to one canonical politician (exact-CPF auto-link or review queue)
+- [x] Profile expenses section and median badge serve Senado data correctly, per-house buckets intact
+- [x] Sync-seam tests cover CEAPS fixture → curated state, including a cross-house identity-link case
+
+**Implemented 2026-09-16.** Adapter: `internal/senado` (registry via legis API `senador/lista/atual.json`; CEAPS via admin API `/api/v1/senadores/despesas_ceaps/{year}` JSON — the CSV variant is latin-1 with decimal commas). Key facts verified live: CEAPS rows are uniquely keyed and carry `codSenador` (auto-link via the source-id map); the Senado publishes no senator CPF, so cross-house linkage resolves via the name+UF review queue (the senator still gets her own politician record pending human resolution — never auto-merged). No migration needed (`expense.house` was already house-scoped). Worker: `senado-registry` + `senado-ceaps` daily jobs (registry first) and `bootstrap-senado` for 2023+ backfill.
+
+**Known edges (from code review, accepted for now):**
+- A merged both-house politician (deputada → senadora) shows only the active house's expenses on the profile (senado wins); past-mandate CEAP rows are hidden until profiles render per-house sections (rankings/profile-split work).
+- If the Senado ever publishes senator CPFs, thread them through `Senator` → `LinkIdentity` (path exists, field doesn't).
+- `internal/senado` imports `camara.DigitsOnly`; fine at two houses, wants a shared util if a third adapter appears.

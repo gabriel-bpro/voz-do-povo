@@ -1,0 +1,16 @@
+[
+  {
+    "Code": 9001,
+    "Name": "MARIA EXEMPLO",
+    "CivilName": "Maria da Silva Exemplo",
+    "PartySigla": "PT",
+    "UF": "SP"
+  },
+  {
+    "Code": 9002,
+    "Name": "ANA MOSTRA",
+    "CivilName": "Ana Mostra Souza",
+    "PartySigla": "PSDB",
+    "UF": "MG"
+  }
+]

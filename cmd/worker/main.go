@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"voz-do-povo/internal/camara"
+	"voz-do-povo/internal/senado"
 	"voz-do-povo/internal/store"
 	"voz-do-povo/internal/sync"
 )
@@ -46,6 +47,7 @@ func main() {
 	}
 
 	client := camara.New()
+	senadoClient := senado.New()
 
 	// One-shot history backfill: `worker bootstrap-camara` re-ingests the
 	// CEAP bulk files for every year since historyStartYear, then exits.
@@ -61,17 +63,41 @@ func main() {
 		return
 	}
 
+	// Same backfill for the Senado: registry first (CEAPS links via
+	// codSenador), then every CEAPS year dataset since historyStartYear.
+	if len(os.Args) > 1 && os.Args[1] == "bootstrap-senado" {
+		if err := syncSenadoRegistry(ctx, db, senadoClient); err != nil {
+			log.Fatalf("bootstrap-senado registry: %v", err)
+		}
+		for year := historyStartYear; year <= time.Now().Year(); year++ {
+			if err := syncSenadoExpensesYear(ctx, db, senadoClient, year); err != nil {
+				log.Fatalf("bootstrap-senado %d: %v", year, err)
+			}
+		}
+		log.Printf("bootstrap-senado done (%d→%d)", historyStartYear, time.Now().Year())
+		return
+	}
+
 	// CEAP cadence: the bulk year files are updated daily and are the only
 	// working CEAP source (the API's despesas endpoint returns empty for
 	// every deputy — verified 2026-09-08), so the current-year bulk re-ingest
-	// runs daily and doubles as the delta. Railway fires this process on a
-	// daily cron schedule; each run executes every sync once and exits.
+	// runs daily and doubles as the delta. CEAPS likewise: the year dataset
+	// is updated daily upstream. Railway fires this process on a daily cron
+	// schedule; each run executes every sync once and exits.
 	jobs := []job{
 		{"camara-registry", func(ctx context.Context) error {
 			return syncCamaraRegistry(ctx, db, client)
 		}},
 		{"camara-expenses-bulk", func(ctx context.Context) error {
 			return syncCamaraBulk(ctx, db, client, time.Now().Year())
+		}},
+		// Registry before expenses: CEAPS rows link via codSenador against
+		// the registry-built source-id map.
+		{"senado-registry", func(ctx context.Context) error {
+			return syncSenadoRegistry(ctx, db, senadoClient)
+		}},
+		{"senado-ceaps", func(ctx context.Context) error {
+			return syncSenadoExpensesYear(ctx, db, senadoClient, time.Now().Year())
 		}},
 	}
 
@@ -156,5 +182,48 @@ func syncCamaraBulk(ctx context.Context, db *sql.DB, client *camara.Client, year
 		return fmt.Errorf("promote: %w", err)
 	}
 	log.Printf("sync camara-expenses-bulk %d: %+v", year, stats)
+	return nil
+}
+
+// syncSenadoRegistry refreshes the senator registry (senators in exercise).
+// The Senado publishes no CPF, so cross-house linkage falls to the name+UF
+// review queue inside the promote step.
+func syncSenadoRegistry(ctx context.Context, db *sql.DB, client *senado.Client) error {
+	senators, err := client.ListSenators(ctx)
+	if err != nil {
+		return fmt.Errorf("list senators: %w", err)
+	}
+	if err := sync.SyncSenadoSenators(ctx, db, senators); err != nil {
+		return fmt.Errorf("promote: %w", err)
+	}
+	log.Printf("sync senado-registry: %d senators promoted", len(senators))
+	return nil
+}
+
+// syncSenadoExpensesYear re-ingests the CEAPS year dataset: freshness (the
+// dataset is updated daily upstream) and ground-truth reconciliation in one
+// pass. CEAPS rows carry no party sigla, so the registry's sigla at sync
+// time stands in.
+func syncSenadoExpensesYear(ctx context.Context, db *sql.DB, client *senado.Client, year int) error {
+	senators, err := client.ListSenators(ctx)
+	if err != nil {
+		return fmt.Errorf("list senators for party map: %w", err)
+	}
+	partyBySenator := make(map[int64]string, len(senators))
+	for _, s := range senators {
+		partyBySenator[s.Code] = s.PartySigla
+	}
+
+	all, err := client.FetchExpenses(ctx, year)
+	if err != nil {
+		return fmt.Errorf("fetch ceaps %d: %w", year, err)
+	}
+
+	stats, err := sync.SyncSenadoExpenses(ctx, db,
+		sync.SourceSenadoCEAPSYear+fmt.Sprint(year), year, all, partyBySenator)
+	if err != nil {
+		return fmt.Errorf("promote: %w", err)
+	}
+	log.Printf("sync senado-ceaps %d: %+v", year, stats)
 	return nil
 }

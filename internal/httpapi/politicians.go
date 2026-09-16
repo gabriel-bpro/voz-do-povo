@@ -19,8 +19,10 @@ const termStartYear = 2023
 
 // Source names as shown to citizens (pt-BR), keyed by our internal source ids.
 const (
-	sourceNameRegistry = "Câmara dos Deputados — cadastro de deputados"
-	sourceNameCEAP     = "Câmara dos Deputados — CEAP (cota parlamentar)"
+	sourceNameRegistryCamara = "Câmara dos Deputados — cadastro de deputados"
+	sourceNameRegistrySenado = "Senado Federal — cadastro de senadores"
+	sourceNameCEAP           = "Câmara dos Deputados — CEAP (cota parlamentar)"
+	sourceNameCEAPS          = "Senado Federal — CEAPS (cota de exercício da atividade parlamentar)"
 )
 
 // sourceMeta is the provenance block every data-carrying response includes:
@@ -71,7 +73,10 @@ func (s *server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"query":   q,
 		"results": results,
-		"sources": []sourceMeta{s.registrySource(r.Context())},
+		"sources": []sourceMeta{
+			s.registrySource(r.Context(), sync.SourceCamaraDeputies),
+			s.registrySource(r.Context(), sync.SourceSenadoSenators),
+		},
 	})
 }
 
@@ -106,13 +111,19 @@ func (s *server) handleProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	house := s.politicianHouse(ctx, id)
+	registryKey := sync.SourceCamaraDeputies
+	if house == "senado" {
+		registryKey = sync.SourceSenadoSenators
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"politician": p,
-		"summary":    profileSummary(p),
+		"summary":    profileSummary(p, house),
 		// Provenance: identity data comes from the registry sync; the
 		// expenses section carries its own source block.
-		"sources":  []sourceMeta{s.registrySource(ctx)},
-		"expenses": s.expenseSection(ctx, id, year),
+		"sources":  []sourceMeta{s.registrySource(ctx, registryKey)},
+		"expenses": s.expenseSection(ctx, id, year, house),
 	})
 }
 
@@ -149,16 +160,51 @@ func (s *server) loadPolitician(ctx context.Context, id int64) (politicianView, 
 	return p, nil
 }
 
+// politicianHouse resolves the politician's active house from the source-id
+// map: "senado" wins over "camara" (a canonical person with both is a
+// current senator with a deputy past). "" when no registry link exists.
+func (s *server) politicianHouse(ctx context.Context, id int64) string {
+	house := ""
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT source FROM curated.politician_source_id WHERE politician_id = $1`, id)
+	if err != nil {
+		log.Printf("profile %d house lookup: %v", id, err)
+		return ""
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var src string
+		if err := rows.Scan(&src); err != nil {
+			log.Printf("profile %d house scan: %v", id, err)
+			return house
+		}
+		if src == "senado" {
+			house = "senado"
+		} else if src == "camara" && house == "" {
+			house = "camara"
+		}
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("profile %d house rows: %v", id, err)
+	}
+	return house
+}
+
 // profileSummary is the templated identity sentence. Zero LLM, no free prose:
 // the prototype's template, kept gender-neutral because the schema does not
-// (yet) carry the registry's sexo field.
-func profileSummary(p politicianView) string {
+// (yet) carry the registry's sexo field. Senator mandates vary within a
+// legislature (1/3 + 2/3 renewal), so the senador(a) template carries no
+// mandate years.
+func profileSummary(p politicianView, house string) string {
 	where := ""
 	switch {
 	case p.Party != nil && p.UF != nil:
 		where = fmt.Sprintf(" por %s (%s)", *p.UF, *p.Party)
 	case p.UF != nil:
 		where = fmt.Sprintf(" por %s", *p.UF)
+	}
+	if house == "senado" {
+		return fmt.Sprintf("%s é senador(a) da República%s.", p.ParliamentaryName, where)
 	}
 	return fmt.Sprintf("%s é deputado(a) federal%s, no mandato 2023–2026.", p.ParliamentaryName, where)
 }
@@ -184,17 +230,31 @@ const (
 		)`
 )
 
-// expenseSection builds the profile's expenses block. When the politician has
-// no Câmara link and no linked expenses, it returns the honest "not linked"
-// state instead of fabricating numbers or hiding the section.
-func (s *server) expenseSection(ctx context.Context, politicianID int64, year int) map[string]any {
-	source := sourceMeta{Key: sync.SourceCamaraCEAP, Name: sourceNameCEAP, SyncedAt: s.lastExpenseSync(ctx)}
+// expenseSection builds the profile's expenses block. When the politician
+// has no registry link (either house) and no linked expenses, it returns the
+// honest "not linked" state instead of fabricating numbers or hiding the
+// section. house (from politicianHouse) scopes every aggregate and the
+// source block — CEAP and CEAPS quotas are never mixed; "" (no registry
+// link) leaves the queries unscoped.
+func (s *server) expenseSection(ctx context.Context, politicianID int64, year int, house string) map[string]any {
+	source := sourceMeta{
+		Key:      sync.SourceCamaraCEAP,
+		Name:     sourceNameCEAP,
+		SyncedAt: s.lastExpenseSync(ctx, "camara"),
+	}
+	if house == "senado" {
+		source = sourceMeta{
+			Key:      sync.SourceSenadoCEAPS,
+			Name:     sourceNameCEAPS,
+			SyncedAt: s.lastExpenseSync(ctx, "senado"),
+		}
+	}
 
 	var linked bool
 	if err := s.db.QueryRowContext(ctx, `
 		SELECT EXISTS (
 			SELECT 1 FROM curated.politician_source_id
-			WHERE politician_id = $1 AND source = 'camara'
+			WHERE politician_id = $1 AND source IN ('camara', 'senado')
 		) OR EXISTS (
 			SELECT 1 FROM curated.expense WHERE politician_id = $1
 		)`, politicianID).Scan(&linked); err != nil {
@@ -211,8 +271,9 @@ func (s *server) expenseSection(ctx context.Context, politicianID int64, year in
 	var total float64
 	if err := s.db.QueryRowContext(ctx, `
 		SELECT COALESCE(SUM(amount_net), 0)::float8
-		FROM curated.expense WHERE politician_id = $1 AND year = $2`,
-		politicianID, year).Scan(&total); err != nil {
+		FROM curated.expense
+		WHERE politician_id = $1 AND year = $2 AND ($3 = '' OR house = $3)`,
+		politicianID, year, house).Scan(&total); err != nil {
 		log.Printf("profile %d total: %v", politicianID, err)
 	}
 
@@ -226,8 +287,9 @@ func (s *server) expenseSection(ctx context.Context, politicianID int64, year in
 	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT month, SUM(amount_net)::float8
-		FROM curated.expense WHERE politician_id = $1 AND year = $2
-		GROUP BY month`, politicianID, year)
+		FROM curated.expense
+		WHERE politician_id = $1 AND year = $2 AND ($3 = '' OR house = $3)
+		GROUP BY month`, politicianID, year, house)
 	if err != nil {
 		log.Printf("profile %d monthly: %v", politicianID, err)
 	} else {
@@ -258,13 +320,13 @@ func (s *server) expenseSection(ctx context.Context, politicianID int64, year in
 	itemRows, err := s.db.QueryContext(ctx, medianBucketsCTE+`
 		SELECT e.category, e.supplier_name, to_char(e.issued_at, 'YYYY-MM-DD'),
 		       e.amount_net::float8, e.document_url,
-		       CASE WHEN b.n >= $3 AND e.amount_net >= $4 AND e.amount_net > b.median
+		       CASE WHEN b.n >= $4 AND e.amount_net >= $5 AND e.amount_net > b.median
 		            THEN b.median END AS badge_median
 		FROM curated.expense e
 		LEFT JOIN buckets b ON b.house = e.house AND b.category = e.category
-		WHERE e.politician_id = $1 AND e.year = $2
+		WHERE e.politician_id = $1 AND e.year = $2 AND ($3 = '' OR e.house = $3)
 		ORDER BY e.amount_net DESC
-		LIMIT 10`, politicianID, year, badgeMinBucketN, badgeMinAmount)
+		LIMIT 10`, politicianID, year, house, badgeMinBucketN, badgeMinAmount)
 	if err != nil {
 		log.Printf("profile %d largest items: %v", politicianID, err)
 	} else {
@@ -287,9 +349,9 @@ func (s *server) expenseSection(ctx context.Context, politicianID int64, year in
 		SELECT COUNT(*)
 		FROM curated.expense e
 		JOIN buckets b ON b.house = e.house AND b.category = e.category
-		WHERE e.politician_id = $1 AND e.year = $2
-		  AND b.n >= $3 AND e.amount_net >= $4 AND e.amount_net > b.median`,
-		politicianID, year, badgeMinBucketN, badgeMinAmount).Scan(&flaggedCount); err != nil {
+		WHERE e.politician_id = $1 AND e.year = $2 AND ($3 = '' OR e.house = $3)
+		  AND b.n >= $4 AND e.amount_net >= $5 AND e.amount_net > b.median`,
+		politicianID, year, house, badgeMinBucketN, badgeMinAmount).Scan(&flaggedCount); err != nil {
 		log.Printf("profile %d flagged count: %v", politicianID, err)
 	}
 
@@ -312,26 +374,37 @@ func (s *server) expenseSection(ctx context.Context, politicianID int64, year in
 	}
 }
 
-// registrySource derives the registry dataset's freshness from the curated
+// registrySource derives a registry dataset's freshness from the curated
 // layer (the app never reads raw): every registry sync run touches
-// updated_at (or created_at on first insert), so the max is the last run.
-func (s *server) registrySource(ctx context.Context) sourceMeta {
-	var at *time.Time
-	if err := s.db.QueryRowContext(ctx,
-		`SELECT MAX(GREATEST(created_at, updated_at)) FROM curated.politician`).Scan(&at); err != nil {
-		log.Printf("registry freshness: %v", err)
+// updated_at (or created_at on first insert) of that source's politicians,
+// so the max is the last run. The source key selects the house's registry
+// (sync.SourceCamaraDeputies | sync.SourceSenadoSenators).
+func (s *server) registrySource(ctx context.Context, sourceKey string) sourceMeta {
+	source := "camara"
+	name := sourceNameRegistryCamara
+	if sourceKey == sync.SourceSenadoSenators {
+		source = "senado"
+		name = sourceNameRegistrySenado
 	}
-	return sourceMeta{Key: sync.SourceCamaraDeputies, Name: sourceNameRegistry, SyncedAt: at}
+	var at *time.Time
+	if err := s.db.QueryRowContext(ctx, `
+		SELECT MAX(GREATEST(p.created_at, p.updated_at))
+		FROM curated.politician p
+		JOIN curated.politician_source_id si ON si.politician_id = p.id
+		WHERE si.source = $1`, source).Scan(&at); err != nil {
+		log.Printf("registry freshness (%s): %v", source, err)
+	}
+	return sourceMeta{Key: sourceKey, Name: name, SyncedAt: at}
 }
 
-// lastExpenseSync derives CEAP's last sync from curated rows: every sync run
-// bumps synced_at (upsert), so MAX is the last run that saw data. nil when
-// never synced.
-func (s *server) lastExpenseSync(ctx context.Context) *time.Time {
+// lastExpenseSync derives a house's last expense sync from curated rows:
+// every sync run bumps synced_at (upsert), so MAX is the last run that saw
+// data. nil when never synced.
+func (s *server) lastExpenseSync(ctx context.Context, house string) *time.Time {
 	var at *time.Time
 	if err := s.db.QueryRowContext(ctx,
-		`SELECT MAX(synced_at) FROM curated.expense WHERE house = 'camara'`).Scan(&at); err != nil {
-		log.Printf("ceap freshness: %v", err)
+		`SELECT MAX(synced_at) FROM curated.expense WHERE house = $1`, house).Scan(&at); err != nil {
+		log.Printf("expense freshness (%s): %v", house, err)
 	}
 	return at
 }
