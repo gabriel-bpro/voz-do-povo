@@ -56,17 +56,22 @@ func seedPartyRow(t *testing.T, db *sql.DB, sigla string) int64 {
 
 func seedExpense(t *testing.T, db *sql.DB, politicianID int64, partyID *int64, year, month int, category, supplier, issuedAt string, amountNet float64) {
 	t.Helper()
+	seedExpenseHouse(t, db, "camara", politicianID, partyID, year, month, category, supplier, issuedAt, amountNet)
+}
+
+func seedExpenseHouse(t *testing.T, db *sql.DB, house string, politicianID int64, partyID *int64, year, month int, category, supplier, issuedAt string, amountNet float64) {
+	t.Helper()
 	_, err := db.Exec(`
 		INSERT INTO curated.expense (
 			politician_id, party_id, house, category, supplier_name, issued_at,
 			year, month, amount_net, source_row_key
-		) VALUES ($1,$2,'camara',$3,$4,$5,$6,$7,$8,$9)`,
-		politicianID, partyID, category, supplier, issuedAt,
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+		politicianID, partyID, house, category, supplier, issuedAt,
 		year, month, amountNet,
 		// Unique dedup key per seeded row.
-		url.QueryEscape(supplier)+issuedAt)
+		house+url.QueryEscape(supplier)+issuedAt)
 	if err != nil {
-		t.Fatalf("seed expense (%s/%d/%d): %v", category, year, month, err)
+		t.Fatalf("seed expense (%s/%s/%d/%d): %v", house, category, year, month, err)
 	}
 }
 

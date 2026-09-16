@@ -1,0 +1,44 @@
+[
+  {
+    "ID": 77001,
+    "SenatorCode": 9001,
+    "SenatorName": "MARIA EXEMPLO",
+    "Category": "Passagens aéreas, aquáticas e terrestres nacionais",
+    "SupplierName": "AEROTUR EXEMPLO",
+    "SupplierTaxID": "05120923000109",
+    "DocumentNumber": "2270131196",
+    "IssuedAt": "2026-01-21",
+    "Year": 2026,
+    "Month": 1,
+    "Detail": "Passageiro: MARIA EXEMPLO (PARLAMENTAR)",
+    "AmountNet": 1315.35
+  },
+  {
+    "ID": 77002,
+    "SenatorCode": 9002,
+    "SenatorName": "ANA MOSTRA",
+    "Category": "Aluguel de imóveis para escritório político",
+    "SupplierName": "IMOBILIARIA EXEMPLO LTDA",
+    "SupplierTaxID": "22222222000122",
+    "DocumentNumber": "ALG-88",
+    "IssuedAt": "2026-02-10",
+    "Year": 2026,
+    "Month": 2,
+    "Detail": "",
+    "AmountNet": 800.00
+  },
+  {
+    "ID": 77003,
+    "SenatorCode": 9999,
+    "SenatorName": "EX SENADOR SUMIDO",
+    "Category": "Passagens aéreas, aquáticas e terrestres nacionais",
+    "SupplierName": "AEROTUR EXEMPLO",
+    "SupplierTaxID": "05120923000109",
+    "DocumentNumber": "2270999999",
+    "IssuedAt": "2026-01-25",
+    "Year": 2026,
+    "Month": 1,
+    "Detail": "",
+    "AmountNet": 501.95
+  }
+]

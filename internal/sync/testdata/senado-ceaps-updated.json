@@ -1,0 +1,16 @@
+[
+  {
+    "ID": 77001,
+    "SenatorCode": 9001,
+    "SenatorName": "MARIA EXEMPLO",
+    "Category": "Passagens aéreas, aquáticas e terrestres nacionais",
+    "SupplierName": "AEROTUR EXEMPLO",
+    "SupplierTaxID": "05120923000109",
+    "DocumentNumber": "2270131196",
+    "IssuedAt": "2026-01-21",
+    "Year": 2026,
+    "Month": 1,
+    "Detail": "Passageiro: MARIA EXEMPLO (PARLAMENTAR)",
+    "AmountNet": 1400.00
+  }
+]
