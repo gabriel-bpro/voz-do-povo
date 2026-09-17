@@ -226,6 +226,25 @@ td .item-sub {
   color: #fff;
 }
 
+/* --- home rankings: card grid + bar rows (prototype variant B) --- */
+
+.ranking-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.bar {
+  height: 8px;
+  background: var(--accent);
+  border-radius: 4px;
+  min-width: 2px;
+}
+
+table.data td.bar-cell {
+  width: 38%;
+}
+
 /* --- home search --- */
 
 .hero {
