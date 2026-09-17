@@ -1,21 +1,29 @@
 // Home: the citizen's entry point — the politician search bar front and
-// center plus the one-line project explainer (issue 13). Rankings arrive
-// with issue 16.
+// center, the one-line project explainer (issue 13), and the expense
+// rankings block under a Deputados/Senadores toggle (issue 16).
 
 import Link from "next/link";
-import { searchPoliticians, type SearchResponse } from "@/lib/api";
+import {
+  getRankings,
+  searchPoliticians,
+  type House,
+} from "@/lib/api";
 import { SourceLine } from "@/components/SourceLine";
+import { Rankings } from "@/components/Rankings";
 
 export default async function Home({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; casa?: string }>;
 }) {
-  const { q } = await searchParams;
+  const { q, casa } = await searchParams;
   const query = (q ?? "").trim();
-  const search: SearchResponse | null = query
-    ? await searchPoliticians(query)
-    : null;
+  const house: House = casa === "senado" ? "senado" : "camara";
+
+  const [search, rankings] = await Promise.all([
+    query ? searchPoliticians(query) : Promise.resolve(null),
+    getRankings(house),
+  ]);
 
   return (
     <main className="wrap">
@@ -26,6 +34,7 @@ export default async function Home({
           linguagem simples.
         </p>
         <form className="search-form" action="/" method="get">
+          {casa === "senado" && <input type="hidden" name="casa" value="senado" />}
           <input
             type="search"
             name="q"
@@ -65,6 +74,8 @@ export default async function Home({
       {query && !search && (
         <p className="empty-note">API indisponível no momento.</p>
       )}
+
+      {rankings && <Rankings rankings={rankings} house={house} query={query} />}
     </main>
   );
 }

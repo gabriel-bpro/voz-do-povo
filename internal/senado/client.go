@@ -59,11 +59,11 @@ type senatorList struct {
 		Parlamentares struct {
 			Parlamentar []struct {
 				Identificacao struct {
-					Codigo     string `json:"CodigoParlamentar"`
-					Nome       string `json:"NomeParlamentar"`
-					NomeCivil  string `json:"NomeCompletoParlamentar"`
-					Partido    string `json:"SiglaPartidoParlamentar"`
-					UF         string `json:"UfParlamentar"`
+					Codigo    string `json:"CodigoParlamentar"`
+					Nome      string `json:"NomeParlamentar"`
+					NomeCivil string `json:"NomeCompletoParlamentar"`
+					Partido   string `json:"SiglaPartidoParlamentar"`
+					UF        string `json:"UfParlamentar"`
 				} `json:"IdentificacaoParlamentar"`
 			} `json:"Parlamentar"`
 		} `json:"Parlamentares"`
@@ -99,26 +99,31 @@ func (c *Client) ListSenators(ctx context.Context) ([]Senator, error) {
 // amounts are plain numbers; dates are ISO. Verified against the live 2026
 // dataset (2026-09-15).
 type ceapsRow struct {
-	ID            int64   `json:"id"`
-	Ano           int     `json:"ano"`
-	Mes           int     `json:"mes"`
-	CodSenador    int64   `json:"codSenador"`
-	NomeSenador   string  `json:"nomeSenador"`
-	TipoDespesa   string  `json:"tipoDespesa"`
-	CPFCNPJ       string  `json:"cpfCnpj"`
-	Fornecedor    string  `json:"fornecedor"`
-	Documento     string  `json:"documento"`
-	Data          string  `json:"data"`
-	Detalhamento  string  `json:"detalhamento"`
-	ValorReemb    float64 `json:"valorReembolsado"`
+	ID           int64   `json:"id"`
+	Ano          int     `json:"ano"`
+	Mes          int     `json:"mes"`
+	CodSenador   int64   `json:"codSenador"`
+	NomeSenador  string  `json:"nomeSenador"`
+	TipoDespesa  string  `json:"tipoDespesa"`
+	CPFCNPJ      string  `json:"cpfCnpj"`
+	Fornecedor   string  `json:"fornecedor"`
+	Documento    string  `json:"documento"`
+	Data         string  `json:"data"`
+	Detalhamento string  `json:"detalhamento"`
+	ValorReemb   float64 `json:"valorReembolsado"`
 }
 
 func (r ceapsRow) normalize() Expense {
 	return Expense{
-		ID:             r.ID,
-		SenatorCode:    r.CodSenador,
-		SenatorName:    r.NomeSenador,
-		Category:       r.TipoDespesa,
+		ID:          r.ID,
+		SenatorCode: r.CodSenador,
+		SenatorName: r.NomeSenador,
+		Category: func() string {
+			if len(r.TipoDespesa) == 0 {
+				return "Outras despesas"
+			}
+			return r.TipoDespesa
+		}(),
 		SupplierName:   r.Fornecedor,
 		SupplierTaxID:  camara.DigitsOnly(r.CPFCNPJ),
 		DocumentNumber: r.Documento,

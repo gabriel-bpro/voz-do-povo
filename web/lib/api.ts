@@ -89,6 +89,47 @@ export function searchPoliticians(q: string): Promise<SearchResponse | null> {
   );
 }
 
+// --- home expense rankings (issue 16) ---
+
+export type House = "camara" | "senado";
+
+export interface RankingPerson {
+  id: number;
+  parliamentaryName: string;
+  uf: string | null;
+  party: string | null;
+}
+
+export interface TopSpender {
+  politician: RankingPerson;
+  total: number;
+}
+
+export interface BiggestExpense {
+  politician: RankingPerson;
+  category: string;
+  supplierName: string | null;
+  issuedAt: string | null;
+  amountNet: number;
+}
+
+export interface RankingsResponse {
+  house: House;
+  // Year of the top-spenders ranking (current calendar year).
+  year: number;
+  // Month of the biggest-single-expenses ranking: the latest month the sync
+  // has landed for the house (graceful degradation, not "now").
+  month: number;
+  monthYear: number;
+  topSpenders: TopSpender[];
+  biggestExpenses: BiggestExpense[];
+  source: SourceMeta;
+}
+
+export function getRankings(house: House): Promise<RankingsResponse | null> {
+  return getJSON<RankingsResponse>(`/api/rankings?house=${house}`);
+}
+
 export async function getProfile(
   id: number,
   year?: number,

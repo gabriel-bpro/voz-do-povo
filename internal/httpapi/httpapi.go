@@ -39,6 +39,7 @@ func New(db *sql.DB) http.Handler {
 
 	mux.HandleFunc("GET /api/politicians/search", s.handleSearch)
 	mux.HandleFunc("GET /api/politicians/{id}", s.handleProfile)
+	mux.HandleFunc("GET /api/rankings", s.handleRankings)
 
 	return mux
 }

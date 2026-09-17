@@ -6,8 +6,10 @@
 
 **Status:** ready-for-agent
 
-- [ ] Home shows top-spenders-of-the-year and biggest-single-expenses-of-the-month rankings, ~10 rows each
-- [ ] The Deputados/Senadores toggle switches both rankings; the toggle state is coherent across the block
-- [ ] Every ranking row links to the politician's profile
-- [ ] Rankings never mix CEAP and CEAPS values in one comparison
-- [ ] HTTP-API-seam tests cover both rankings, both house selections, and sync-date presence
+- [x] Home shows top-spenders-of-the-year and biggest-single-expenses-of-the-month rankings, ~10 rows each
+- [x] The Deputados/Senadores toggle switches both rankings; the toggle state is coherent across the block
+- [x] Every ranking row links to the politician's profile
+- [x] Rankings never mix CEAP and CEAPS values in one comparison
+- [x] HTTP-API-seam tests cover both rankings, both house selections, and sync-date presence
+
+**Done 2026-09-16.** API: `GET /api/rankings?house=camara|senado` (`internal/httpapi/rankings.go`) — top spenders sum the current calendar year; "of the month" uses the latest month the sync has landed for that house (graceful degradation, never "now"), returned as `month`/`monthYear` so the title states it honestly. Unlinked expenses (`politician_id NULL`) never rank — a row must link to a profile. Row party = most recent expense's party in that house. Web: `web/components/Rankings.tsx`, toggle is plain links (`?casa=senado`, preserves an active `q`) — zero client JS; bars reuse the prototype's `barRows` pattern (`.bar` + `.ranking-grid` in globals.css). No badges on ranking rows (per ticket 08).
