@@ -71,6 +71,48 @@ export interface ProfileResponse {
   // section carries its own source block.
   sources: SourceMeta[];
   expenses: ExpensesLinked | ExpensesUnlinked;
+  emendas: EmendasLinked | EmendasUnlinked;
+}
+
+// --- profile emendas section (issue 17) ---
+
+export interface EmendaYearTotal {
+  year: number;
+  empenhado: number;
+  pago: number;
+}
+
+export interface EmendaBreakdownRow {
+  label: string;
+  total: number;
+}
+
+export interface EmendaTop {
+  code: string;
+  year: number;
+  tipo: string;
+  // Permanent type marker (transferência especial), NOT an attention badge.
+  isPix: boolean;
+  localidade: string | null;
+  funcao: string | null;
+  empenhado: number;
+  pago: number;
+}
+
+export interface EmendasLinked {
+  linked: true;
+  year: number;
+  years: EmendaYearTotal[];
+  byArea: EmendaBreakdownRow[];
+  byLocalidade: EmendaBreakdownRow[];
+  top: EmendaTop[];
+  source: SourceMeta;
+}
+
+export interface EmendasUnlinked {
+  linked: false;
+  message: string;
+  source: SourceMeta;
 }
 
 async function getJSON<T>(path: string): Promise<T | null> {
