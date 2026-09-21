@@ -1,0 +1,6 @@
+Código da Emenda;Ano da Emenda;Tipo de Emenda;Autor da Emenda;Nome do Autor da Emenda;Número da Emenda;Localidade do gasto;Função;Subfunção;Empenhado (R$);Liquidado (R$);Pago (R$)
+2026E0001;2026;Emenda Individual;A001;MARIA EXEMPLO;0001;Taubaté - SP;Saúde;Atenção Básica;1.500.000,00;800.000,00;600.000,00
+2026E0002;2026;Transferência Especial;A001;MARIA EXEMPLO;0002;Fundo municipal de Taubaté - SP;;;2.500.000,00;2.500.000,00;2.500.000,00
+2026E0003;2026;Emenda Individual;A002;Dep. João Amostra;0003;Rio de Janeiro - RJ;Educação;Ensino Fundamental;750.000,00;0,00;0,00
+2026E0004;2026;Emenda Individual;A999;AUTOR DESCONHECIDO TOTAL;0004;Manaus - AM;Trabalho;;100.000,00;0,00;0,00
+2026E0005;2026;Emenda Individual;A003;MARIA EXEMPLOS;0005;São Paulo - SP;Saúde;;200.000,00;100.000,00;50.000,00

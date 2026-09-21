@@ -18,6 +18,7 @@ import (
 	"voz-do-povo/internal/senado"
 	"voz-do-povo/internal/store"
 	"voz-do-povo/internal/sync"
+	"voz-do-povo/internal/transparencia"
 )
 
 // camaraLegislatures covers the 2023+ history: the 56th legislature ended
@@ -48,6 +49,7 @@ func main() {
 
 	client := camara.New()
 	senadoClient := senado.New()
+	transparenciaClient := transparencia.New()
 
 	// One-shot history backfill: `worker bootstrap-camara` re-ingests the
 	// CEAP bulk files for every year since historyStartYear, then exits.
@@ -78,6 +80,18 @@ func main() {
 		return
 	}
 
+	// Same backfill for the emendas: one bulk spreadsheet per year since
+	// historyStartYear (the recurring job only covers the current year).
+	if len(os.Args) > 1 && os.Args[1] == "bootstrap-emendas" {
+		for year := historyStartYear; year <= time.Now().Year(); year++ {
+			if err := syncEmendasYear(ctx, db, transparenciaClient, year); err != nil {
+				log.Fatalf("bootstrap-emendas %d: %v", year, err)
+			}
+		}
+		log.Printf("bootstrap-emendas done (%d→%d)", historyStartYear, time.Now().Year())
+		return
+	}
+
 	// CEAP cadence: the bulk year files are updated daily and are the only
 	// working CEAP source (the API's despesas endpoint returns empty for
 	// every deputy — verified 2026-09-08), so the current-year bulk re-ingest
@@ -98,6 +112,15 @@ func main() {
 		}},
 		{"senado-ceaps", func(ctx context.Context) error {
 			return syncSenadoExpensesYear(ctx, db, senadoClient, time.Now().Year())
+		}},
+		// Emendas cadence is weekly (spec): the current-year spreadsheet
+		// doubles as freshness + ground-truth reconciliation, like CEAP.
+		{"transparencia-emendas", func(ctx context.Context) error {
+			if time.Now().Weekday() != time.Sunday {
+				log.Printf("sync transparencia-emendas: skipped (weekly job, runs on Sundays)")
+				return nil
+			}
+			return syncEmendasYear(ctx, db, transparenciaClient, time.Now().Year())
 		}},
 	}
 
@@ -225,5 +248,21 @@ func syncSenadoExpensesYear(ctx context.Context, db *sql.DB, client *senado.Clie
 		return fmt.Errorf("promote: %w", err)
 	}
 	log.Printf("sync senado-ceaps %d: %+v", year, stats)
+	return nil
+}
+
+// syncEmendasYear re-ingests the Portal da Transparência emendas spreadsheet
+// for a year: freshness and ground-truth reconciliation in one pass.
+func syncEmendasYear(ctx context.Context, db *sql.DB, client *transparencia.Client, year int) error {
+	all, err := client.FetchEmendas(ctx, year)
+	if err != nil {
+		return fmt.Errorf("fetch emendas %d: %w", year, err)
+	}
+	stats, err := sync.SyncEmendas(ctx, db,
+		sync.SourceTransparenciaEmendasYear+fmt.Sprint(year), year, all)
+	if err != nil {
+		return fmt.Errorf("promote: %w", err)
+	}
+	log.Printf("sync transparencia-emendas %d: %+v", year, stats)
 	return nil
 }

@@ -6,10 +6,12 @@
 
 **Status:** ready-for-agent
 
-- [ ] Weekly bulk spreadsheet sync promotes emendas raw → curated, linked to canonical politicians
-- [ ] Profile shows yearly empenhado vs pago totals with the plain-language emenda/gap explainer
-- [ ] Breakdowns by policy area and by state/municipality render in the locked style
-- [ ] Top 5 largest emendas show beneficiary names
-- [ ] Emendas PIX are flagged distinctly as a permanent type marker (not an attention badge)
-- [ ] Sync-seam tests cover fixture spreadsheet → curated state, including PIX classification
-- [ ] HTTP-API-seam tests cover the emendas section payload incl. source + sync date
+- [x] Weekly bulk spreadsheet sync promotes emendas raw → curated, linked to canonical politicians
+- [x] Profile shows yearly empenhado vs pago totals with the plain-language emenda/gap explainer
+- [x] Breakdowns by policy area and by state/municipality render in the locked style
+- [x] Top 5 largest emendas show beneficiary names
+- [x] Emendas PIX are flagged distinctly as a permanent type marker (not an attention badge)
+- [x] Sync-seam tests cover fixture spreadsheet → curated state, including PIX classification
+- [x] HTTP-API-seam tests cover the emendas section payload incl. source + sync date
+
+**Done 2026-09-21.** Decisions (user, this session): the bulk CSV has no favorecido column, so top-5 "beneficiary" renders the source's `Localidade do gasto`; identity linkage is name-only (the file carries no CPF/UF/source id) — exact unique normalized-name auto-link, else pg_trgm similarity ≥ 0.90 to the single closest match, ties/collisions to the review queue. PIX = tipo "Transferência Especial". Cadence is weekly (Sunday-gated job); `worker bootstrap-emendas` backfills 2023+. Breakdowns are capped at the top 8 rows per grouping; the year selector is shared with the expenses section (same `?year=`).

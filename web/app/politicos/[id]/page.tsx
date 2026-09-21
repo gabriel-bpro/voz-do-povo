@@ -5,7 +5,11 @@
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getProfile, type ProfileResponse } from "@/lib/api";
+import {
+  getProfile,
+  type ProfileResponse,
+  type EmendasLinked,
+} from "@/lib/api";
 import { SourceLine } from "@/components/SourceLine";
 import {
   brl,
@@ -42,7 +46,7 @@ export default async function ProfilePage({
 }
 
 function Profile({ profile }: { profile: ProfileResponse }) {
-  const { politician: p, summary, sources, expenses } = profile;
+  const { politician: p, summary, sources, expenses, emendas } = profile;
   // Data-only sub-line: the templated sentence (cargo, mandato) is the API's
   // summary — one template, one owner.
   const subtitle = p.party && p.uf ? `${p.party}–${p.uf}` : (p.party ?? p.uf);
@@ -94,6 +98,30 @@ function Profile({ profile }: { profile: ProfileResponse }) {
           </div>
         ) : (
           <Expenses expenses={expenses} politicianID={p.id} />
+        )}
+      </section>
+
+      <section className="card" id="emendas">
+        <div className="card-header">
+          <h2>
+            Emendas parlamentares {emendas.linked ? emendas.year : ""} ·{" "}
+            <span
+              className="tooltip"
+              title="Emenda PIX (transferência especial) vai direto para o fundo da prefeitura ou do estado, sem objeto específico. É o tipo de emenda mais difícil de rastrear."
+            >
+              emenda PIX
+            </span>
+          </h2>
+          <SourceLine source={emendas.source} />
+        </div>
+
+        {!emendas.linked ? (
+          <div className="not-linked">
+            <strong>Dados não ligados.</strong>
+            <p>{emendas.message}</p>
+          </div>
+        ) : (
+          <Emendas emendas={emendas} />
         )}
       </section>
     </>
@@ -186,5 +214,150 @@ function Expenses({
         </tbody>
       </table>
     </>
+  );
+}
+
+// Emendas section (issue 17), locked prototype style: stat trio (empenhado /
+// pago / % pago) for the selected year, yearly totals table, breakdowns by
+// policy area and by localidade with bars, top 5 with the permanent PIX type
+// marker, and the plain-language explainer.
+function Emendas({ emendas }: { emendas: EmendasLinked }) {
+  const current = emendas.years.find((y) => y.year === emendas.year);
+  const empenhado = current?.empenhado ?? 0;
+  const pago = current?.pago ?? 0;
+  const pctPago = empenhado > 0 ? Math.round((pago / empenhado) * 100) : 0;
+  const anchor = salariosMinimosAnchor(empenhado, emendas.year);
+
+  return (
+    <>
+      <div className="stat-trio">
+        <div>
+          <div className="fonte">Empenhado (reservado)</div>
+          <div className="stat-value">{brl.format(empenhado)}</div>
+        </div>
+        <div>
+          <div className="fonte">Pago de fato</div>
+          <div className="stat-value">{brl.format(pago)}</div>
+        </div>
+        <div>
+          <div className="fonte">% pago</div>
+          <div className="stat-value" style={{ color: "var(--warn)" }}>
+            {pctPago}%
+          </div>
+        </div>
+      </div>
+      {anchor && <p className="sub-line">{anchor} empenhados em {emendas.year}</p>}
+
+      <div className="explainer">
+        ℹ️ Emenda parlamentar é dinheiro do orçamento federal que o parlamentar
+        direciona para uma cidade, estado ou entidade. Empenhado é o valor
+        reservado; pago é o que efetivamente saiu do cofre. A diferença
+        importa: emenda empenhada e não paga pode indicar obra parada ou
+        destino travado.
+      </div>
+
+      <table className="data">
+        <thead>
+          <tr>
+            <th>Ano</th>
+            <th style={{ textAlign: "right" }}>Empenhado</th>
+            <th style={{ textAlign: "right" }}>Pago</th>
+            <th style={{ textAlign: "right" }}>% pago</th>
+          </tr>
+        </thead>
+        <tbody>
+          {emendas.years.map((y) => (
+            <tr key={y.year}>
+              <td>{y.year}</td>
+              <td className="num">{brl.format(y.empenhado)}</td>
+              <td className="num">{brl.format(y.pago)}</td>
+              <td className="num">
+                {y.empenhado > 0 ? Math.round((y.pago / y.empenhado) * 100) : 0}%
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {emendas.byArea.length > 0 && (
+        <BreakdownTable title={`Por área (${emendas.year})`} rows={emendas.byArea} />
+      )}
+
+      {emendas.byLocalidade.length > 0 && (
+        <BreakdownTable
+          title={`Por estado/município (${emendas.year})`}
+          rows={emendas.byLocalidade}
+        />
+      )}
+
+      {emendas.top.length > 0 && (
+        <table className="data">
+          <thead>
+            <tr>
+              <th>Maiores emendas de {emendas.year}</th>
+              <th style={{ textAlign: "right" }}>Empenhado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {emendas.top.map((e) => (
+              <tr key={e.code}>
+                <td>
+                  {e.localidade ?? "Localidade não informada"}{" "}
+                  {e.isPix && <span className="badge-pix">PIX</span>}
+                  <div className="item-sub">
+                    {[e.funcao, e.tipo].filter(Boolean).join(" · ")}
+                  </div>
+                </td>
+                <td className="num">{brl.format(e.empenhado)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <p className="fonte" style={{ marginTop: 10 }}>
+        Emenda = dinheiro federal direcionado pelo parlamentar.{" "}
+        <strong>PIX</strong> = sem objeto específico, a mais difícil de
+        rastrear.
+      </p>
+    </>
+  );
+}
+
+// Emendas breakdown (policy area / localidade): label, proportional bar,
+// empenhado — one shape, both groupings.
+function BreakdownTable({
+  title,
+  rows,
+}: {
+  title: string;
+  rows: { label: string; total: number }[];
+}) {
+  const max = Math.max(...rows.map((r) => r.total), 0);
+  return (
+    <table className="data">
+      <thead>
+        <tr>
+          <th>{title}</th>
+          <th />
+          <th style={{ textAlign: "right" }}>Empenhado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.label}>
+            <td>{r.label}</td>
+            <td className="bar-cell">
+              <div
+                className="bar"
+                style={{
+                  width: `${max > 0 ? Math.max((r.total / max) * 100, 2) : 2}%`,
+                }}
+              />
+            </td>
+            <td className="num">{brl.format(r.total)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }

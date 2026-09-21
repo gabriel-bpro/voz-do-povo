@@ -23,6 +23,7 @@ const (
 	sourceNameRegistrySenado = "Senado Federal — cadastro de senadores"
 	sourceNameCEAP           = "Câmara dos Deputados — CEAP (cota parlamentar)"
 	sourceNameCEAPS          = "Senado Federal — CEAPS (cota de exercício da atividade parlamentar)"
+	sourceNameEmendas        = "Portal da Transparência — emendas parlamentares"
 )
 
 // sourceMeta is the provenance block every data-carrying response includes:
@@ -124,6 +125,7 @@ func (s *server) handleProfile(w http.ResponseWriter, r *http.Request) {
 		// expenses section carries its own source block.
 		"sources":  []sourceMeta{s.registrySource(ctx, registryKey)},
 		"expenses": s.expenseSection(ctx, id, year, house),
+		"emendas":  s.emendaSection(ctx, id, year),
 	})
 }
 
@@ -395,6 +397,138 @@ func (s *server) registrySource(ctx context.Context, sourceKey string) sourceMet
 		log.Printf("registry freshness (%s): %v", source, err)
 	}
 	return sourceMeta{Key: sourceKey, Name: name, SyncedAt: at}
+}
+
+// emendaSection builds the profile's emendas block: yearly empenhado/pago
+// totals (whole term), the selected year's breakdowns by policy area and by
+// localidade (state/municipality), and the year's 5 largest emendas with the
+// PIX type marker. A politician with no linked emendas gets the honest
+// "not linked" state — the source gives only the author's name, so a missing
+// link and "authored nothing" are indistinguishable without review.
+func (s *server) emendaSection(ctx context.Context, politicianID int64, year int) map[string]any {
+	source := sourceMeta{
+		Key:      sync.SourceTransparenciaEmendas,
+		Name:     sourceNameEmendas,
+		SyncedAt: s.lastEmendaSync(ctx),
+	}
+
+	var linked bool
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT EXISTS (SELECT 1 FROM curated.emenda WHERE politician_id = $1)`,
+		politicianID).Scan(&linked); err != nil {
+		log.Printf("profile %d emenda link check: %v", politicianID, err)
+	}
+	if !linked {
+		return map[string]any{
+			"linked":  false,
+			"message": "Ainda não conseguimos ligar as emendas desta pessoa à fonte oficial com segurança. Não mostramos números sem essa confirmação.",
+			"source":  source,
+		}
+	}
+
+	type yearTotal struct {
+		Year      int     `json:"year"`
+		Empenhado float64 `json:"empenhado"`
+		Pago      float64 `json:"pago"`
+	}
+	years := []yearTotal{}
+	yearRows, err := s.db.QueryContext(ctx, `
+		SELECT year, SUM(amount_empenhado)::float8, SUM(amount_pago)::float8
+		FROM curated.emenda
+		WHERE politician_id = $1
+		GROUP BY year
+		ORDER BY year`, politicianID)
+	if err != nil {
+		log.Printf("profile %d emenda years: %v", politicianID, err)
+	} else {
+		defer yearRows.Close()
+		for yearRows.Next() {
+			var yt yearTotal
+			if yearRows.Scan(&yt.Year, &yt.Empenhado, &yt.Pago) == nil {
+				years = append(years, yt)
+			}
+		}
+	}
+
+	type breakdownRow struct {
+		Label string  `json:"label"`
+		Total float64 `json:"total"`
+	}
+	breakdown := func(column string) []breakdownRow {
+		out := []breakdownRow{}
+		rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`
+			SELECT COALESCE(%s, 'Não informado'), SUM(amount_empenhado)::float8
+			FROM curated.emenda
+			WHERE politician_id = $1 AND year = $2
+			GROUP BY 1
+			ORDER BY 2 DESC
+			LIMIT 8`, column), politicianID, year)
+		if err != nil {
+			log.Printf("profile %d emenda breakdown %s: %v", politicianID, column, err)
+			return out
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var b breakdownRow
+			if rows.Scan(&b.Label, &b.Total) == nil {
+				out = append(out, b)
+			}
+		}
+		return out
+	}
+
+	type topEmenda struct {
+		Code       string  `json:"code"`
+		Year       int     `json:"year"`
+		Tipo       string  `json:"tipo"`
+		IsPIX      bool    `json:"isPix"`
+		Localidade *string `json:"localidade"`
+		Funcao     *string `json:"funcao"`
+		Empenhado  float64 `json:"empenhado"`
+		Pago       float64 `json:"pago"`
+	}
+	top := []topEmenda{}
+	topRows, err := s.db.QueryContext(ctx, `
+		SELECT code, year, tipo, is_pix, localidade, funcao,
+		       amount_empenhado::float8, amount_pago::float8
+		FROM curated.emenda
+		WHERE politician_id = $1 AND year = $2
+		ORDER BY amount_empenhado DESC
+		LIMIT 5`, politicianID, year)
+	if err != nil {
+		log.Printf("profile %d top emendas: %v", politicianID, err)
+	} else {
+		defer topRows.Close()
+		for topRows.Next() {
+			var te topEmenda
+			if topRows.Scan(&te.Code, &te.Year, &te.Tipo, &te.IsPIX,
+				&te.Localidade, &te.Funcao, &te.Empenhado, &te.Pago) == nil {
+				top = append(top, te)
+			}
+		}
+	}
+
+	return map[string]any{
+		"linked":       true,
+		"year":         year,
+		"years":        years,
+		"byArea":       breakdown("funcao"),
+		"byLocalidade": breakdown("localidade"),
+		"top":          top,
+		"source":       source,
+	}
+}
+
+// lastEmendaSync derives the emendas freshness from curated rows: every sync
+// run bumps synced_at (upsert), so MAX is the last run that saw data. nil
+// when never synced.
+func (s *server) lastEmendaSync(ctx context.Context) *time.Time {
+	var at *time.Time
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT MAX(synced_at) FROM curated.emenda`).Scan(&at); err != nil {
+		log.Printf("emenda freshness: %v", err)
+	}
+	return at
 }
 
 // lastExpenseSync derives a house's last expense sync from curated rows:
