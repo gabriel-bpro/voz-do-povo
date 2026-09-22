@@ -28,6 +28,14 @@ const (
 // author-name fallback (user decision, issue 17): below it, no link.
 const emendaAuthorSimilarityFloor = 0.90
 
+// isPIXEmenda reports the permanent PIX type marker: a transferência
+// especial, identified by its normalized tipo (see transparencia constants).
+func isPIXEmenda(tipo string) bool {
+	norm := NormalizeName(tipo)
+	return strings.Contains(norm, transparencia.PIXTipoFragmentPlural) ||
+		strings.Contains(norm, transparencia.PIXTipoFragmentSingular)
+}
+
 // EmendaSyncStats summarizes an emendas sync run for the (logs-only) ops trail.
 type EmendaSyncStats struct {
 	Rows          int
@@ -121,7 +129,7 @@ func SyncEmendas(ctx context.Context, db *sql.DB, source string, reconcileYear i
 				raw_id           = EXCLUDED.raw_id,
 				synced_at        = now()`,
 			pid, e.AuthorName, e.Code, e.Year, nilIfEmpty(e.Number), e.Tipo,
-			strings.Contains(NormalizeName(e.Tipo), transparencia.PIXTipoFragment),
+			isPIXEmenda(e.Tipo),
 			nilIfEmpty(e.Localidade), nilIfEmpty(e.Funcao), nilIfEmpty(e.Subfuncao),
 			e.Empenhado, e.Liquidado, e.Pago,
 			rawIDs[i]); err != nil {

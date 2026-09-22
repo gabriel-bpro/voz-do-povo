@@ -251,10 +251,18 @@ func syncSenadoExpensesYear(ctx context.Context, db *sql.DB, client *senado.Clie
 	return nil
 }
 
-// syncEmendasYear re-ingests the Portal da Transparência emendas spreadsheet
-// for a year: freshness and ground-truth reconciliation in one pass.
+// syncEmendasYear re-ingests the emendas dataset for a year: freshness and
+// ground-truth reconciliation in one pass. The API (TRANSPARENCIA_API_KEY) is
+// the primary path — the bulk spreadsheet is Akamai-blocked from datacenters
+// (verified 2026-09-22) and stays as the keyless fallback.
 func syncEmendasYear(ctx context.Context, db *sql.DB, client *transparencia.Client, year int) error {
-	all, err := client.FetchEmendas(ctx, year)
+	var all []transparencia.Emenda
+	var err error
+	if key := os.Getenv("TRANSPARENCIA_API_KEY"); key != "" {
+		all, err = client.FetchEmendasAPI(ctx, year, key)
+	} else {
+		all, err = client.FetchEmendas(ctx, year)
+	}
 	if err != nil {
 		return fmt.Errorf("fetch emendas %d: %w", year, err)
 	}

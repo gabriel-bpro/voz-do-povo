@@ -138,6 +138,17 @@ func TestSyncEmendas(t *testing.T) {
 	if rawID == 0 {
 		t.Errorf("raw_id not set — provenance missing")
 	}
+
+	// Negative restatement with a floating sign ("- 100.000,00"), seen on
+	// live data: parsed, stored negative.
+	var negEmpenhado float64
+	if err := db.QueryRowContext(ctx,
+		`SELECT amount_empenhado FROM curated.emenda WHERE code = '2026E0004'`).Scan(&negEmpenhado); err != nil {
+		t.Fatalf("lookup 2026E0004: %v", err)
+	}
+	if negEmpenhado != -100000.00 {
+		t.Errorf("2026E0004 empenhado = %v, want -100000 (floating-sign negative)", negEmpenhado)
+	}
 }
 
 // Seam 2: the weekly re-ingest reconciles against ground truth — restated

@@ -18,14 +18,21 @@ import (
 
 const (
 	defaultDownloadURL = "https://portaldatransparencia.gov.br/download-de-dados/emendas/%d"
+	defaultAPIBase     = "https://api.portaldatransparencia.gov.br/api-de-dados"
+	// apiPagePause paces the paginated API walk under the documented rate
+	// limit (400 req/min daytime): a full year is ~420 pages.
+	apiPagePause = 150 * time.Millisecond
 )
 
-// Client fetches the Portal da Transparência bulk spreadsheets. No API key:
-// the portal itself recommends the bulk downloads over the API for volume.
+// Client fetches the Portal da Transparência emendas dataset. Two paths:
+// the REST API (needs a registered e-mail key; works from datacenters) and
+// the bulk spreadsheet (no key, but Akamai-blocked from datacenters —
+// verified 2026-09-22, same wall as TSE).
 type Client struct {
 	http *http.Client
 	// downloadURL is a fmt.Sprintf pattern taking the year.
 	downloadURL string
+	apiBase     string
 }
 
 // New returns a Client against the production endpoints.
@@ -33,7 +40,98 @@ func New() *Client {
 	return &Client{
 		http:        &http.Client{Timeout: 10 * time.Minute},
 		downloadURL: defaultDownloadURL,
+		apiBase:     defaultAPIBase,
 	}
+}
+
+// emendaAPIRow is one row of the /emendas API response.
+type emendaAPIRow struct {
+	CodigoEmenda string `json:"codigoEmenda"`
+	Ano          int    `json:"ano"`
+	TipoEmenda   string `json:"tipoEmenda"`
+	NomeAutor    string `json:"nomeAutor"`
+	NumeroEmenda string `json:"numeroEmenda"`
+	Localidade   string `json:"localidadeDoGasto"`
+	Funcao       string `json:"funcao"`
+	Subfuncao    string `json:"subfuncao"`
+	Empenhado    string `json:"valorEmpenhado"`
+	Liquidado    string `json:"valorLiquidado"`
+	Pago         string `json:"valorPago"`
+}
+
+// FetchEmendasAPI walks the /emendas API (keyed, 15 rows/page) until an empty
+// page and returns every emenda of the year, normalized.
+func (c *Client) FetchEmendasAPI(ctx context.Context, year int, apiKey string) ([]Emenda, error) {
+	var out []Emenda
+	for page := 1; ; page++ {
+		url := fmt.Sprintf("%s/emendas?ano=%d&pagina=%d", c.apiBase, year, page)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			return nil, fmt.Errorf("build request: %w", err)
+		}
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("chave-api-dados", apiKey)
+		resp, err := c.http.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("get %s: %w", url, err)
+		}
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("get %s: status %d", url, resp.StatusCode)
+		}
+		var raws []json.RawMessage
+		if err := json.Unmarshal(body, &raws); err != nil {
+			return nil, fmt.Errorf("decode %s: %w", url, err)
+		}
+		if len(raws) == 0 {
+			return out, nil
+		}
+		for _, raw := range raws {
+			var row emendaAPIRow
+			if err := json.Unmarshal(raw, &row); err != nil {
+				return nil, fmt.Errorf("parse api row (page %d): %w", page, err)
+			}
+			e, err := row.normalize()
+			if err != nil {
+				return nil, fmt.Errorf("normalize api row %q: %w", row.CodigoEmenda, err)
+			}
+			e.Raw = raw
+			out = append(out, e)
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(apiPagePause):
+		}
+	}
+}
+
+func (r emendaAPIRow) normalize() (Emenda, error) {
+	e := Emenda{
+		Code:       r.CodigoEmenda,
+		Year:       r.Ano,
+		Tipo:       r.TipoEmenda,
+		AuthorName: r.NomeAutor,
+		Number:     r.NumeroEmenda,
+		Localidade: r.Localidade,
+		Funcao:     r.Funcao,
+		Subfuncao:  r.Subfuncao,
+	}
+	if e.Code == "" || e.Year == 0 || e.Tipo == "" {
+		return Emenda{}, &ParseError{Field: "code/year/tipo", Value: r.CodigoEmenda, Err: fmt.Errorf("missing natural key fields")}
+	}
+	var err error
+	if e.Empenhado, err = ParseBRMoney(r.Empenhado); err != nil {
+		return Emenda{}, err
+	}
+	if e.Liquidado, err = ParseBRMoney(r.Liquidado); err != nil {
+		return Emenda{}, err
+	}
+	if e.Pago, err = ParseBRMoney(r.Pago); err != nil {
+		return Emenda{}, err
+	}
+	return e, nil
 }
 
 // FetchEmendas downloads the emendas parlamentares bulk spreadsheet for a

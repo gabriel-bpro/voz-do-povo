@@ -30,15 +30,23 @@ type Emenda struct {
 }
 
 // PIXTipoFragment identifies a transferência especial ("emenda PIX") by its
-// normalized tipo de emenda. The PIX check itself lives in the sync package
-// (which owns name normalization); kept as a constant here, next to the type.
-const PIXTipoFragment = "TRANSFERENCIA ESPECIAL"
+// normalized tipo de emenda. The live values are plural ("Emenda Individual -
+// Transferências Especiais"); the singular appears in older dictionaries.
+// "ESPECIAL" is a substring of neither, so the check matches both fragments —
+// and no other tipo carries either. The PIX check itself lives in the sync
+// package (which owns name normalization); kept as constants here, next to
+// the type.
+const (
+	PIXTipoFragmentPlural   = "ESPECIAIS"
+	PIXTipoFragmentSingular = "ESPECIAL"
+)
 
-// ParseBRMoney parses the spreadsheet's pt-BR amounts ("1.234.567,89",
-// "0,00", "1500000"). Empty yields 0.
+// ParseBRMoney parses the source's pt-BR amounts ("1.234.567,89", "0,00",
+// "1500000"), including the negative form with a floating sign ("- 17.088,41",
+// seen live on restated empenhados). Empty yields 0.
 func ParseBRMoney(s string) (float64, error) {
-	s = strings.TrimSpace(s)
-	if s == "" {
+	s = strings.ReplaceAll(s, " ", "")
+	if s == "" || s == "-" {
 		return 0, nil
 	}
 	s = strings.ReplaceAll(s, ".", "")

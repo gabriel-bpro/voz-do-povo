@@ -1,5 +1,5 @@
 Código da Emenda;Ano da Emenda;Tipo de Emenda;Autor da Emenda;Nome do Autor da Emenda;Número da Emenda;Localidade do gasto;Função;Subfunção;Empenhado (R$);Liquidado (R$);Pago (R$)
-2026E0001;2026;Emenda Individual;A001;MARIA EXEMPLO;0001;Taubaté - SP;Saúde;Atenção Básica;1.500.000,00;900.000,00;700.000,00
-2026E0003;2026;Emenda Individual;A002;Dep. João Amostra;0003;Rio de Janeiro - RJ;Educação;Ensino Fundamental;750.000,00;0,00;0,00
-2026E0004;2026;Emenda Individual;A999;AUTOR DESCONHECIDO TOTAL;0004;Manaus - AM;Trabalho;;100.000,00;0,00;0,00
-2026E0005;2026;Emenda Individual;A003;MARIA EXEMPLOS;0005;São Paulo - SP;Saúde;;200.000,00;100.000,00;50.000,00
+2026E0001;2026;Emenda Individual - Transferências com Finalidade Definida;A001;MARIA EXEMPLO;0001;Taubaté - SP;Saúde;Atenção Básica;1.500.000,00;900.000,00;700.000,00
+2026E0003;2026;Emenda Individual - Transferências com Finalidade Definida;A002;Dep. João Amostra;0003;Rio de Janeiro - RJ;Educação;Ensino Fundamental;750.000,00;0,00;0,00
+2026E0004;2026;Emenda de Bancada;A999;AUTOR DESCONHECIDO TOTAL;0004;Manaus - AM;Trabalho;;- 100.000,00;0,00;0,00
+2026E0005;2026;Emenda de Bancada;A003;MARIA EXEMPLOS;0005;São Paulo - SP;Saúde;;200.000,00;100.000,00;50.000,00
