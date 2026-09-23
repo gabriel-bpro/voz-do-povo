@@ -1,18 +1,84 @@
 /* Design tokens + component classes locked by the plain-language report
    prototype (.scratch/voz-do-povo-mvp/prototype/plain-language-report.html):
-   stat cards, big numbers, bars, inline tooltips, human-scale anchors. */
+   stat cards, big numbers, bars, inline tooltips, human-scale anchors.
+
+   Token layers:
+     1. Palette  — raw scales straight from the design-system color tables
+     2. Semantic — what the UI means (ink, surface, accent, warn, info…)
+     3. Components — reference ONLY semantic tokens. No raw hexes allowed. */
+
+/* ---------- 1. Palette: design-system scales ---------- */
 
 :root {
-  --ink: #1a2332;
-  --muted: #5b6779;
-  --line: #dde3ec;
-  --accent: #006b3f;
-  --accent-soft: #e6f4ec;
-  --warn: #b3261e;
-  --warn-soft: #fdeceb;
-  --bg: #f7f8fa;
-  --card: #ffffff;
+  /* Primary — greens */
+  --green-900: #00541d;
+  --green-800: #007b2a;
+  --green-700: #009d35; /* design-system base "primary color" */
+  --green-500: #15bf4e;
+  --green-300: #39cc6b;
+
+  /* Secondary #1 — purples */
+  --purple-900: #19064f;
+  --purple-800: #270b73;
+  --purple-700: #331094;
+  --purple-500: #4b25b4;
+  --purple-300: #6746c4;
+
+  /* Secondary #2 — yellows */
+  --yellow-900: #736100;
+  --yellow-800: #a78c00;
+  --yellow-700: #d7b400;
+  --yellow-500: #ffda1c;
+  --yellow-300: #ffe147;
+
+  /* Complementary — reds */
+  --red-900: #731200;
+  --red-800: #a71a00;
+  --red-700: #d72100;
+  --red-500: #ff3f1c;
+  --red-300: #ff6347;
+
+  /* Neutrals — NOT in the design tables; keep as their own ramp
+     so the palette stays the only place with "free" colors. */
+  --neutral-900: #1a2332;
+  --neutral-600: #5b6779;
+  --neutral-300: #dde3ec;
+  --neutral-100: #f7f8fa;
+  --white: #ffffff;
 }
+
+/* ---------- 2. Semantic tokens ---------- */
+
+:root {
+  /* Text + surfaces */
+  --ink: var(--neutral-900);
+  --muted: var(--neutral-600);
+  --line: var(--neutral-300);
+  --bg: var(--neutral-100);
+  --card: var(--white);
+
+  /* Brand accent (primary actions, active pills, bars) */
+  --accent: var(--green-800);
+  --accent-strong: var(--green-700);
+  --accent-hover: var(--green-900);
+  --accent-soft: var(--green-300); /* was a hand-mixed tint; now from scale */
+
+  /* Secondary accent (charts, second data series) */
+  --accent-2: var(--purple-700);
+  --accent-2-soft: var(--purple-300);
+
+  /* Warning / attention — complementary red ramp */
+  --warn: var(--red-800);
+  --warn-strong: var(--red-700);
+  --warn-soft: var(--red-300);
+
+  /* Highlight / marker — yellow ramp (PIX badge etc.) */
+  --marker: var(--yellow-900);
+  --marker-bg: var(--yellow-300);
+  --marker-line: var(--yellow-700);
+}
+
+/* ---------- 3. Base ---------- */
 
 html {
   height: 100%;
@@ -57,7 +123,7 @@ a {
   padding: 32px 20px 64px;
 }
 
-/* --- cards + section headers --- */
+/* ---------- Cards + section headers ---------- */
 
 .card {
   background: var(--card);
@@ -89,7 +155,7 @@ a {
   color: var(--muted);
 }
 
-/* --- big numbers + anchors --- */
+/* ---------- Big numbers + anchors ---------- */
 
 .big-number {
   font-size: 34px;
@@ -103,10 +169,10 @@ a {
   margin-top: 2px;
 }
 
-/* --- explainer box + inline concept tooltips --- */
+/* ---------- Explainer box + inline concept tooltips ---------- */
 
 .explainer {
-  background: var(--accent-soft);
+  background: color-mix(in srgb, var(--accent-soft) 30%, var(--white));
   border-radius: 8px;
   padding: 10px 14px;
   font-size: 14px;
@@ -118,7 +184,7 @@ a {
   cursor: help;
 }
 
-/* --- monthly trend bars --- */
+/* ---------- Monthly trend bars ---------- */
 
 .trend {
   display: flex;
@@ -148,7 +214,7 @@ a {
   text-align: center;
 }
 
-/* --- tables (largest items) --- */
+/* ---------- Tables (largest items) ---------- */
 
 table.data {
   width: 100%;
@@ -181,11 +247,11 @@ td .item-sub {
   color: var(--muted);
 }
 
-/* --- attention badges (rule 1: above the bucket median) --- */
+/* ---------- Attention badges (rule 1: above the bucket median) ---------- */
 
 .badge-attention {
   display: inline-block;
-  background: var(--warn-soft);
+  background: color-mix(in srgb, var(--warn-soft) 35%, var(--white));
   color: var(--warn);
   border-radius: 6px;
   padding: 2px 8px;
@@ -203,13 +269,13 @@ td .item-sub {
   border-bottom: 1px dotted var(--warn);
 }
 
-/* --- emenda PIX: permanent type marker (not an attention badge) --- */
+/* ---------- Emenda PIX: permanent type marker (not an attention badge) ---------- */
 
 .badge-pix {
   display: inline-block;
-  background: #fff3cd;
-  color: #8a6d00;
-  border: 1px solid #ecd47a;
+  background: var(--marker-bg);
+  color: var(--marker);
+  border: 1px solid var(--marker-line);
   border-radius: 4px;
   padding: 1px 8px;
   font-size: 12.5px;
@@ -217,7 +283,7 @@ td .item-sub {
   white-space: nowrap;
 }
 
-/* --- emendas stat trio (empenhado / pago / % pago) --- */
+/* ---------- Emendas stat trio (empenhado / pago / % pago) ---------- */
 
 .stat-trio {
   display: flex;
@@ -232,7 +298,7 @@ td .item-sub {
   font-variant-numeric: tabular-nums;
 }
 
-/* --- toggle pills (year selector) --- */
+/* ---------- Toggle pills (year selector) ---------- */
 
 .pills {
   display: flex;
@@ -252,10 +318,10 @@ td .item-sub {
 .pill.active {
   border-color: var(--accent);
   background: var(--accent);
-  color: #fff;
+  color: var(--white);
 }
 
-/* --- home rankings: card grid + bar rows (prototype variant B) --- */
+/* ---------- Home rankings: card grid + bar rows (prototype variant B) ---------- */
 
 .ranking-grid {
   display: grid;
@@ -274,7 +340,7 @@ table.data td.bar-cell {
   width: 38%;
 }
 
-/* --- home search --- */
+/* ---------- Home search ---------- */
 
 .hero {
   text-align: center;
@@ -316,7 +382,7 @@ table.data td.bar-cell {
 }
 
 .result-row:hover {
-  background: var(--accent-soft);
+  background: color-mix(in srgb, var(--accent-soft) 30%, var(--white));
   border-radius: 8px;
 }
 
@@ -331,7 +397,7 @@ table.data td.bar-cell {
   margin-top: 24px;
 }
 
-/* --- unlinked / degraded states --- */
+/* ---------- Unlinked / degraded states ---------- */
 
 .not-linked {
   border: 1px dashed var(--line);
