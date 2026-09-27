@@ -17,7 +17,8 @@ if ! command -v railway >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! railway whoami >/dev/null 2>&1; then
+# RAILWAY_TOKEN (project token, used by CI) replaces interactive login.
+if [ -z "${RAILWAY_TOKEN:-}" ] && ! railway whoami >/dev/null 2>&1; then
   echo "not logged in — run: railway login" >&2
   exit 1
 fi

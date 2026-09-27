@@ -1,0 +1,7 @@
+name: Setup Railway CLI
+description: Installs the Railway CLI for deploy jobs
+runs:
+  using: composite
+  steps:
+    - run: npm install -g @railway/cli
+      shell: bash

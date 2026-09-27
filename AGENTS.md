@@ -13,7 +13,7 @@ A web app to help people understand, investigate, and do diligence on the politi
 
 - Go: `go build ./...`, `go vet ./...`, `go test ./...`
 - Web: `cd web && npm run lint`, `npm run build`
-- Deploy: `scripts/deploy.sh api|worker|web|all` (wraps `railway up` — api/worker build from the repo-root Dockerfile; web deploys `./web --path-as-root`)
+- Deploy: push to `main` auto-deploys only changed services (path filters in `.github/workflows/ci.yml`, needs `RAILWAY_TOKEN` secret); manual: `scripts/deploy.sh api|worker|web|all` (wraps `railway up` — api/worker build from the repo-root Dockerfile; web deploys `./web --path-as-root`). `.railway/railway.ts` infra changes stay manual (`railway config plan`/`apply`)
 
 ## Tests — two agreed seams (see `.scratch/voz-do-povo-mvp/spec.md`)
 
