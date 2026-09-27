@@ -106,6 +106,10 @@ export interface EmendasLinked {
   byArea: EmendaBreakdownRow[];
   byLocalidade: EmendaBreakdownRow[];
   top: EmendaTop[];
+  // Attention badge (rule 3): present only when >= 50% of the current
+  // calendar year's empenhado is emenda PIX; carries the actual percentage
+  // and the year it was computed on (always the current year, never ?year=).
+  badge: { pixPercent: number; year: number } | null;
   source: SourceMeta;
 }
 
