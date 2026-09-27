@@ -55,17 +55,13 @@ function Profile({ profile }: { profile: ProfileResponse }) {
     <>
       <header className="card">
         {sources[0] && (
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <div className="profile-source">
             <SourceLine source={sources[0]} />
           </div>
         )}
-        <h1 style={{ fontSize: 28 }}>{p.parliamentaryName}</h1>
-        {subtitle && (
-          <p className="sub-line" style={{ fontSize: 14 }}>
-            {subtitle}
-          </p>
-        )}
-        <p style={{ marginTop: 14 }}>{summary}</p>
+        <h1 className="profile-title">{p.parliamentaryName}</h1>
+        {subtitle && <p className="profile-subtitle">{subtitle}</p>}
+        <p className="profile-summary">{summary}</p>
         {expenses.linked && expenses.flaggedCount > 0 && (
           <p className="rollup-attention">
             <a href="#gastos">
@@ -148,7 +144,7 @@ function Expenses({
       )}
 
       <div className="explainer">
-        ℹ️ A cota parlamentar é o dinheiro que cada parlamentar recebe para
+        A cota parlamentar é o dinheiro que cada parlamentar recebe para
         custear o mandato: passagens, escritório, divulgação. Valores aqui são
         os líquidos — já descontadas as glosas (valores devolvidos ou
         desautorizados).
@@ -241,15 +237,13 @@ function Emendas({ emendas }: { emendas: EmendasLinked }) {
         </div>
         <div>
           <div className="fonte">% pago</div>
-          <div className="stat-value" style={{ color: "var(--warn)" }}>
-            {pctPago}%
-          </div>
+          <div className="stat-value">{pctPago}%</div>
         </div>
       </div>
       {anchor && <p className="sub-line">{anchor} empenhados em {emendas.year}</p>}
 
       <div className="explainer">
-        ℹ️ Emenda parlamentar é dinheiro do orçamento federal que o parlamentar
+        Emenda parlamentar é dinheiro do orçamento federal que o parlamentar
         direciona para uma cidade, estado ou entidade. Empenhado é o valor
         reservado; pago é o que efetivamente saiu do cofre. A diferença
         importa: emenda empenhada e não paga pode indicar obra parada ou

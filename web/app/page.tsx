@@ -28,7 +28,9 @@ export default async function Home({
   return (
     <main className="wrap">
       <header className="hero">
-        <h1>Voz do Povo</h1>
+        <h1>
+          Voz do <span className="accent">Povo</span>
+        </h1>
         <p className="explainer-line">
           Dados públicos sobre os políticos que você elegeu, explicados em
           linguagem simples.
