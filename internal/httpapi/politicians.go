@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -16,6 +17,16 @@ import (
 // termStartYear is the first year of the current legislative term: the
 // profile's year selector never reaches further back (history = current term).
 const termStartYear = 2023
+
+// pixBadgeMinShare is the rule-3 threshold: the emendas section badges when
+// at least this share of the current calendar year's empenhado is emenda PIX.
+const pixBadgeMinShare = 0.5
+
+// emendaBadge is the rule-3 attention badge payload on the emendas section.
+type emendaBadge struct {
+	PixPercent int `json:"pixPercent"`
+	Year       int `json:"year"`
+}
 
 // Source names as shown to citizens (pt-BR), keyed by our internal source ids.
 const (
@@ -515,7 +526,33 @@ func (s *server) emendaSection(ctx context.Context, politicianID int64, year int
 		"byArea":       breakdown("funcao"),
 		"byLocalidade": breakdown("localidade"),
 		"top":          top,
+		"badge":        s.emendaPixBadge(ctx, politicianID),
 		"source":       source,
+	}
+}
+
+// emendaPixBadge trips rule 3: >= 50% of the politician's current-calendar-year
+// empenhado is emenda PIX. The badge reports the actual (rounded) percentage
+// and is always computed on the current year, not the ?year= the section is
+// displaying. Zero current-year empenhado never badges.
+func (s *server) emendaPixBadge(ctx context.Context, politicianID int64) *emendaBadge {
+	currentYear := time.Now().Year()
+	var pix, total float64
+	if err := s.db.QueryRowContext(ctx, `
+		SELECT COALESCE(SUM(amount_empenhado) FILTER (WHERE is_pix), 0)::float8,
+		       COALESCE(SUM(amount_empenhado), 0)::float8
+		FROM curated.emenda
+		WHERE politician_id = $1 AND year = $2`, politicianID, currentYear).
+		Scan(&pix, &total); err != nil {
+		log.Printf("profile %d emenda pix badge: %v", politicianID, err)
+		return nil
+	}
+	if total <= 0 || pix/total < pixBadgeMinShare {
+		return nil
+	}
+	return &emendaBadge{
+		PixPercent: int(math.Round(100 * pix / total)),
+		Year:       currentYear,
 	}
 }
 

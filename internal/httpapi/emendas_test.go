@@ -49,6 +49,10 @@ type emendaSectionView struct {
 		Empenhado  float64 `json:"empenhado"`
 		Pago       float64 `json:"pago"`
 	} `json:"top"`
+	Badge *struct {
+		PixPercent int `json:"pixPercent"`
+		Year       int `json:"year"`
+	} `json:"badge"`
 	Source struct {
 		Key      string  `json:"key"`
 		Name     string  `json:"name"`
@@ -126,6 +130,99 @@ func TestProfileEmendasPayload(t *testing.T) {
 	}
 	if em.Source.SyncedAt == nil {
 		t.Errorf("emendas source missing sync date")
+	}
+}
+
+// Rule 3: the emendas section badges when >= 50% of the politician's
+// current-calendar-year empenhado is emenda PIX. The badge reports the actual
+// (rounded) percentage and is computed on the current year regardless of the
+// ?year= the section is displaying.
+func seedEmendaPixShare(t *testing.T, db *sql.DB, pid int64, pixEmpenhado, otherEmpenhado float64) {
+	t.Helper()
+	thisYear := time.Now().Year()
+	seedEmenda(t, db, &pid, "PIX1", thisYear, "Transferência Especial", true, "Fundo X", "", pixEmpenhado, 0)
+	seedEmenda(t, db, &pid, "OTH1", thisYear, "Emenda Individual", false, "Cidade Y", "Saúde", otherEmpenhado, 0)
+}
+
+func TestEmendasPixBadgeTripsAboveHalf(t *testing.T) {
+	db, srv := newSeededAPI(t)
+	seedPolitician(t, db, 21, "Pix Pesado", "Pix Pesado", "SP", "11122233344")
+	seedEmendaPixShare(t, db, 21, 6000, 4000) // 60%
+
+	em := getEmendas(t, srv.URL, 21, time.Now().Year())
+	if em.Badge == nil {
+		t.Fatalf("badge = nil, want trip at 60%% PIX")
+	}
+	if em.Badge.PixPercent != 60 || em.Badge.Year != time.Now().Year() {
+		t.Errorf("badge = %+v, want 60%% of %d", em.Badge, time.Now().Year())
+	}
+}
+
+func TestEmendasPixBadgeTripsAtExactlyHalf(t *testing.T) {
+	db, srv := newSeededAPI(t)
+	seedPolitician(t, db, 22, "Pix Metade", "Pix Metade", "SP", "22233344455")
+	seedEmendaPixShare(t, db, 22, 5000, 5000) // 50%
+
+	em := getEmendas(t, srv.URL, 22, time.Now().Year())
+	if em.Badge == nil {
+		t.Fatalf("badge = nil, want trip at exactly 50%% PIX")
+	}
+	if em.Badge.PixPercent != 50 {
+		t.Errorf("badge.pixPercent = %d, want 50", em.Badge.PixPercent)
+	}
+}
+
+func TestEmendasPixBadgeStaysQuietBelowHalf(t *testing.T) {
+	db, srv := newSeededAPI(t)
+	seedPolitician(t, db, 23, "Pix Leve", "Pix Leve", "SP", "33344455566")
+	seedEmendaPixShare(t, db, 23, 4999, 5001) // 49.97%
+
+	em := getEmendas(t, srv.URL, 23, time.Now().Year())
+	if em.Badge != nil {
+		t.Errorf("badge = %+v, want nil below 50%% PIX", em.Badge)
+	}
+}
+
+func TestEmendasPixBadgeUsesCurrentYearNotSelectedYear(t *testing.T) {
+	db, srv := newSeededAPI(t)
+	seedPolitician(t, db, 24, "Pix Ano Errado", "Pix Ano", "SP", "44455566677")
+	pid := int64(24)
+	thisYear := time.Now().Year()
+	// Current year is 100% PIX (trips); the selected year below is 0% PIX.
+	seedEmenda(t, db, &pid, "CUR1", thisYear, "Transferência Especial", true, "Fundo X", "", 1000, 0)
+	seedEmenda(t, db, &pid, "OLD1", thisYear-1, "Emenda Individual", false, "Cidade Y", "Saúde", 9000, 0)
+
+	em := getEmendas(t, srv.URL, 24, thisYear-1)
+	if em.Badge == nil || em.Badge.PixPercent != 100 || em.Badge.Year != thisYear {
+		t.Errorf("badge = %+v, want 100%% of %d even with ?year=%d", em.Badge, thisYear, thisYear-1)
+	}
+}
+
+// The mirror: heavy PIX last year must not badge a clean current year.
+func TestEmendasPixBadgeIgnoresPastYears(t *testing.T) {
+	db, srv := newSeededAPI(t)
+	seedPolitician(t, db, 25, "Pix Passado", "Pix Passado", "SP", "55566677788")
+	pid := int64(25)
+	thisYear := time.Now().Year()
+	seedEmenda(t, db, &pid, "OLDP", thisYear-1, "Transferência Especial", true, "Fundo X", "", 9000, 0)
+	seedEmenda(t, db, &pid, "CURC", thisYear, "Emenda Individual", false, "Cidade Y", "Saúde", 1000, 0)
+
+	em := getEmendas(t, srv.URL, 25, thisYear-1)
+	if em.Badge != nil {
+		t.Errorf("badge = %+v, want nil — last year's PIX must not trip the badge", em.Badge)
+	}
+}
+
+func TestEmendasPixBadgeNeedsEmpenhado(t *testing.T) {
+	db, srv := newSeededAPI(t)
+	seedPolitician(t, db, 26, "Sem Empenho", "Sem Empenho", "SP", "66677788899")
+	pid := int64(26)
+	// Linked (row exists) but zero empenhado in the current year.
+	seedEmenda(t, db, &pid, "ZERO", time.Now().Year(), "Transferência Especial", true, "Fundo X", "", 0, 0)
+
+	em := getEmendas(t, srv.URL, 26, time.Now().Year())
+	if em.Badge != nil {
+		t.Errorf("badge = %+v, want nil with zero current-year empenhado", em.Badge)
 	}
 }
 

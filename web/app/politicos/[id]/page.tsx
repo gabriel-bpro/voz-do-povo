@@ -50,6 +50,12 @@ function Profile({ profile }: { profile: ProfileResponse }) {
   // Data-only sub-line: the templated sentence (cargo, mandato) is the API's
   // summary — one template, one owner.
   const subtitle = p.party && p.uf ? `${p.party}–${p.uf}` : (p.party ?? p.uf);
+  // Header rollup: flagged expenses (rule 1) + the emendas PIX badge (rule 3).
+  const attentionCount =
+    (expenses.linked ? expenses.flaggedCount : 0) +
+    (emendas.linked && emendas.badge ? 1 : 0);
+  const attentionAnchor =
+    expenses.linked && expenses.flaggedCount > 0 ? "#gastos" : "#emendas";
 
   return (
     <>
@@ -62,12 +68,12 @@ function Profile({ profile }: { profile: ProfileResponse }) {
         <h1 className="profile-title">{p.parliamentaryName}</h1>
         {subtitle && <p className="profile-subtitle">{subtitle}</p>}
         <p className="profile-summary">{summary}</p>
-        {expenses.linked && expenses.flaggedCount > 0 && (
+        {attentionCount > 0 && (
           <p className="rollup-attention">
-            <a href="#gastos">
-              {expenses.flaggedCount === 1
-                ? "1 despesa chama atenção"
-                : `${expenses.flaggedCount} despesas chamam atenção`}
+            <a href={attentionAnchor}>
+              {attentionCount === 1
+                ? "1 item chama atenção"
+                : `${attentionCount} itens chamam atenção`}
             </a>
           </p>
         )}
@@ -226,6 +232,12 @@ function Emendas({ emendas }: { emendas: EmendasLinked }) {
 
   return (
     <>
+      {emendas.badge && (
+        <div className="badge-attention">
+          Chama atenção · {emendas.badge.pixPercent}% das emendas empenhadas
+          em {emendas.badge.year} são emendas PIX
+        </div>
+      )}
       <div className="stat-trio">
         <div>
           <div className="fonte">Empenhado (reservado)</div>
