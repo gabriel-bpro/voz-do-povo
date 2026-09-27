@@ -95,10 +95,10 @@ body {
   color: var(--ink);
   background: var(--bg);
   font-family:
+    var(--font-roboto),
     system-ui,
     -apple-system,
     "Segoe UI",
-    Roboto,
     sans-serif;
   font-size: 16px;
   line-height: 1.55;
@@ -390,7 +390,15 @@ table.data a:hover {
 
 .hero {
   text-align: center;
-  padding: 48px 0 24px;
+  padding: 48px 0 0;
+}
+
+.search-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg);
+  padding: 12px 0;
 }
 
 .hero h1 {
@@ -409,7 +417,10 @@ table.data a:hover {
 .search-form {
   display: flex;
   justify-content: center;
-  margin-top: 24px;
+}
+
+.search-sticky .search-form input {
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--ink) 10%, transparent);
 }
 
 .search-form input {
@@ -426,6 +437,14 @@ table.data a:hover {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-soft) 45%, transparent);
+}
+
+.about p {
+  font-size: 15px;
+}
+
+.about p + p {
+  margin-top: 10px;
 }
 
 .result-row {

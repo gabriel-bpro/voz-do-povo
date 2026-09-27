@@ -35,6 +35,9 @@ export default async function Home({
           Dados públicos sobre os políticos que você elegeu, explicados em
           linguagem simples.
         </p>
+      </header>
+
+      <div className="search-sticky">
         <form className="search-form" action="/" method="get">
           {casa === "senado" && <input type="hidden" name="casa" value="senado" />}
           <input
@@ -46,7 +49,32 @@ export default async function Home({
             autoFocus
           />
         </form>
-      </header>
+      </div>
+
+      {!query && (
+        <section className="card about">
+          <div className="card-header">
+            <h2>Sobre o projeto</h2>
+          </div>
+          <p>
+            O Voz do Povo reúne dados públicos oficiais — como despesas de
+            gabinete, emendas parlamentares e votos — e os traduz para uma
+            linguagem que qualquer pessoa entende.
+          </p>
+          <p>
+            A ideia é simples: você elegeu esses políticos, então merece saber
+            o que eles fazem com o dinheiro público e como atuam em seu nome.
+            Aqui você pesquisa um parlamentar pelo nome e vê, sem juridiquês,
+            quanto ele gasta, onde o dinheiro vai e o que merece a sua
+            atenção.
+          </p>
+          <p>
+            Todos os números vêm de fontes abertas do governo brasileiro, como
+            o portal de dados abertos da Câmara dos Deputados, sempre com a
+            fonte indicada para você conferir.
+          </p>
+        </section>
+      )}
 
       {search && (
         <section className="card">
