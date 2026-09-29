@@ -76,8 +76,8 @@ An **attention badge** ("chama atenção") marks items that trip one of three fi
 - **Two layers**: raw staging (source data landed verbatim, with provenance: source + pulled-at; never read by the app) and curated (cleaned, unified tables promoted from raw; the only schema the app queries). Cleaning bugs are re-runnable; bad parses never reach what the app serves.
 - **Per-source cadence**:
   - CEAP/CEAPS expenses: daily bulk re-ingest of the current-year file (updated daily upstream; doubles as freshness + ground-truth reconciliation). _Amended at ticket 12 implementation (2026-09-08): the Câmara API's per-deputy despesas endpoint returns empty for every deputy — verified live — so the planned "daily API delta" doesn't exist; the daily bulk covers it._
-  - Votes (both houses): daily API delta.
-  - Attendance: Câmara via daily bulk (`eventosPresencaDeputados`); Senado derived daily by walking recent plenary sessions (polite polling — no bulk dataset exists).
+  - Votes (both houses): API delta covering the days since the previous run. _Amended at ticket 19 start (2026-09-28): the worker is a one-shot weekly cron run, so "daily" syncs became "weekly, covering the delta since last run"._
+  - Attendance: Câmara via bulk (`eventosPresencaDeputados`, updated daily upstream); Senado derived by walking recent plenary sessions (polite polling — no bulk dataset exists). Both run weekly inside the cron run.
   - TSE (candidatos, bens, receitas, despesas) via **Base dos Dados BigQuery** (`basedosdados.br_tse_eleicoes`): monthly, weekly during campaign season, gated on BD's `updates.latest` metadata. Go BigQuery client (`cloud.google.com/go/bigquery`) in the worker.
   - Emendas (Portal da Transparência): weekly bulk spreadsheet — no API key.
   - Sanctions (CEIS/CNEP): monthly bulk spreadsheet — no API key.

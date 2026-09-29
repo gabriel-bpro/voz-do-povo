@@ -21,19 +21,20 @@ export default defineRailway(() => {
     },
   });
 
-  // Cron service: Railway starts the container daily at 06:00 UTC
+  // Cron service: Railway starts the container weekly, Monday at 06:00 UTC
   // (03:00 BRT), the worker runs every sync once and exits. No restart —
-  // a failed run surfaces as a failed cron execution, retried next day.
+  // a failed run surfaces as a failed cron execution, retried next week.
   const worker = service("worker", {
     start: "/bin/worker",
     deploy: {
-      cronSchedule: "0 6 * * *",
+      cronSchedule: "0 6 * * 1",
       restartPolicyType: "NEVER",
       numReplicas: 1,
     },
     env: {
       DATABASE_URL: Postgres.env.DATABASE_URL,
       GCP_SERVICE_ACCOUNT_JSON: preserve(),
+      TRANSPARENCIA_API_KEY: preserve(),
     },
   });
 

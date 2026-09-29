@@ -14,10 +14,10 @@ import (
 )
 
 const (
-	defaultAPIBase  = "https://dadosabertos.camara.leg.br/api/v2"
-	defaultBulkURL  = "https://www.camara.leg.br/cotas/Ano-%d.json.zip"
-	bulkPayloadKey  = "dados"
-	maxPageItems    = 100
+	defaultAPIBase = "https://dadosabertos.camara.leg.br/api/v2"
+	defaultBulkURL = "https://www.camara.leg.br/cotas/Ano-%d.json.zip"
+	bulkPayloadKey = "dados"
+	maxPageItems   = 100
 )
 
 // Client fetches from the Câmara REST API and the CEAP bulk files.
@@ -89,10 +89,10 @@ func (c *Client) getPaged(ctx context.Context, url string, decode func(json.RawM
 }
 
 type deputyListItem struct {
-	ID          int64  `json:"id"`
-	Nome        string `json:"nome"`
+	ID           int64  `json:"id"`
+	Nome         string `json:"nome"`
 	SiglaPartido string `json:"siglaPartido"`
-	SiglaUF     string `json:"siglaUf"`
+	SiglaUF      string `json:"siglaUf"`
 }
 
 // ListDeputies returns the registry entries for the given legislatures

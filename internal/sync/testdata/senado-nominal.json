@@ -1,0 +1,48 @@
+[
+  {
+    "SessionCode": "550469",
+    "SessionVoteCode": "7047",
+    "VoteSeq": "4360",
+    "SessionDate": "2026-02-24",
+    "SessionStart": "14:00",
+    "Description": "Votação nominal da Proposta de Emenda à Constituição nº 22, de 2025.",
+    "MatterRef": "PEC 22/2025",
+    "Result": "A",
+    "Secret": false,
+    "Votes": [
+      { "SenatorCode": 9001, "Name": "MARIA EXEMPLO", "PartySigla": "PT", "UF": "SP", "Vote": "Sim" },
+      { "SenatorCode": 9002, "Name": "ANA MOSTRA", "PartySigla": "PSDB", "UF": "MG", "Vote": "Não" },
+      { "SenatorCode": 9003, "Name": "DESCONHECIDO", "PartySigla": "XX", "UF": "AC", "Vote": "AP" }
+    ]
+  },
+  {
+    "SessionCode": "550469",
+    "SessionVoteCode": "7048",
+    "VoteSeq": "4361",
+    "SessionDate": "2026-02-24",
+    "SessionStart": "14:00",
+    "Description": "Votação nominal do Projeto de Decreto Legislativo nº 9, de 2026.",
+    "MatterRef": "PDL 9/2026",
+    "Result": "R",
+    "Secret": false,
+    "Votes": [
+      { "SenatorCode": 9001, "Name": "MARIA EXEMPLO", "PartySigla": "PT", "UF": "SP", "Vote": "P-NRV" },
+      { "SenatorCode": 9002, "Name": "ANA MOSTRA", "PartySigla": "PSDB", "UF": "MG", "Vote": "Sim" }
+    ]
+  },
+  {
+    "SessionCode": "550470",
+    "SessionVoteCode": "7049",
+    "VoteSeq": "4362",
+    "SessionDate": "2026-02-25",
+    "SessionStart": "14:00",
+    "Description": "Votação nominal secreta para cargo no TCU.",
+    "MatterRef": "",
+    "Result": "A",
+    "Secret": true,
+    "Votes": [
+      { "SenatorCode": 9001, "Name": "MARIA EXEMPLO", "PartySigla": "PT", "UF": "SP", "Vote": "AP" },
+      { "SenatorCode": 9002, "Name": "ANA MOSTRA", "PartySigla": "PSDB", "UF": "MG", "Vote": "Votou" }
+    ]
+  }
+]
