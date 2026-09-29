@@ -1,0 +1,26 @@
+[
+  {
+    "ID": "2585316-100",
+    "Date": "2026-02-24",
+    "SiglaOrgao": "PLEN",
+    "EventID": 74889,
+    "Approved": true,
+    "Description": "Aprovado o Projeto de Lei nº 100, de 2026."
+  },
+  {
+    "ID": "2585316-101",
+    "Date": "2026-03-03",
+    "SiglaOrgao": "PLEN",
+    "EventID": 74900,
+    "Approved": false,
+    "Description": "Rejeitado o Requerimento nº 5, de 2026."
+  },
+  {
+    "ID": "2585316-23",
+    "Date": "2026-02-02",
+    "SiglaOrgao": "CCP",
+    "EventID": 0,
+    "Approved": true,
+    "Description": "Encaminhamento em comissão (não plenário)."
+  }
+]

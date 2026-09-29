@@ -1,4 +1,4 @@
-// Worker service: one-shot run of the mirror's syncs, fired daily by a
+// Worker service: one-shot run of the mirror's syncs, fired weekly by a
 // hosting provider cron schedule. Sync failures are logs only for the app — it
 // always renders the last good sync — but a failed sync exits non-zero so
 // the cron run shows as failed.
@@ -92,12 +92,30 @@ func main() {
 		return
 	}
 
+	// Same backfill for votes & attendance (ticket 19): the recurring jobs
+	// only cover the current year.
+	if len(os.Args) > 1 && os.Args[1] == "bootstrap-votes" {
+		for year := historyStartYear; year <= time.Now().Year(); year++ {
+			if err := syncCamaraVotes(ctx, db, client, year); err != nil {
+				log.Fatalf("bootstrap-votes camara %d: %v", year, err)
+			}
+			if err := syncCamaraAttendance(ctx, db, client, year); err != nil {
+				log.Fatalf("bootstrap-votes camara-attendance %d: %v", year, err)
+			}
+			if err := syncSenadoVotes(ctx, db, senadoClient, year); err != nil {
+				log.Fatalf("bootstrap-votes senado %d: %v", year, err)
+			}
+		}
+		log.Printf("bootstrap-votes done (%d→%d)", historyStartYear, time.Now().Year())
+		return
+	}
+
 	// CEAP cadence: the bulk year files are updated daily and are the only
 	// working CEAP source (the API's despesas endpoint returns empty for
 	// every deputy — verified 2026-09-08), so the current-year bulk re-ingest
-	// runs daily and doubles as the delta. CEAPS likewise: the year dataset
-	// is updated daily upstream. hosting provider fires this process on a daily cron
-	// schedule; each run executes every sync once and exits.
+	// doubles as the delta. CEAPS likewise: the year dataset is updated
+	// daily upstream. hosting provider fires this process on a weekly cron schedule
+	// (Monday 06:00 UTC); each run executes every sync once and exits.
 	jobs := []job{
 		{"camara-registry", func(ctx context.Context) error {
 			return syncCamaraRegistry(ctx, db, client)
@@ -110,16 +128,22 @@ func main() {
 		{"senado-registry", func(ctx context.Context) error {
 			return syncSenadoRegistry(ctx, db, senadoClient)
 		}},
+		// Votes before attendance: the câmara attendance sync promotes
+		// presences only for plenary sessions the votes sync just upserted.
+		// Both need the registries (source-id map) to have run first.
+		{"camara-votes", func(ctx context.Context) error {
+			return syncCamaraVotes(ctx, db, client, time.Now().Year())
+		}},
+		{"camara-attendance", func(ctx context.Context) error {
+			return syncCamaraAttendance(ctx, db, client, time.Now().Year())
+		}},
+		{"senado-votes", func(ctx context.Context) error {
+			return syncSenadoVotes(ctx, db, senadoClient, time.Now().Year())
+		}},
 		{"senado-ceaps", func(ctx context.Context) error {
 			return syncSenadoExpensesYear(ctx, db, senadoClient, time.Now().Year())
 		}},
-		// Emendas cadence is weekly (spec): the current-year spreadsheet
-		// doubles as freshness + ground-truth reconciliation, like CEAP.
 		{"transparencia-emendas", func(ctx context.Context) error {
-			if time.Now().Weekday() != time.Sunday {
-				log.Printf("sync transparencia-emendas: skipped (weekly job, runs on Sundays)")
-				return nil
-			}
 			return syncEmendasYear(ctx, db, transparenciaClient, time.Now().Year())
 		}},
 	}
@@ -272,5 +296,66 @@ func syncEmendasYear(ctx context.Context, db *sql.DB, client *transparencia.Clie
 		return fmt.Errorf("promote: %w", err)
 	}
 	log.Printf("sync transparencia-emendas %d: %+v", year, stats)
+	return nil
+}
+
+// syncCamaraVotes re-ingests the year's three vote bulk files (events,
+// per-deputy votes, party orientations) and promotes them: vote rows,
+// orientations, and the plenary sessions behind nominal votes (the
+// attendance denominator).
+func syncCamaraVotes(ctx context.Context, db *sql.DB, client *camara.Client, year int) error {
+	events, err := client.FetchVoteEvents(ctx, year)
+	if err != nil {
+		return fmt.Errorf("fetch votacoes %d: %w", year, err)
+	}
+	casts, err := client.FetchVoteCasts(ctx, year)
+	if err != nil {
+		return fmt.Errorf("fetch votos %d: %w", year, err)
+	}
+	orientations, err := client.FetchVoteOrientations(ctx, year)
+	if err != nil {
+		return fmt.Errorf("fetch orientacoes %d: %w", year, err)
+	}
+	stats, err := sync.SyncCamaraVotes(ctx, db, sync.SourceCamaraVotacoesYear, year, events, casts, orientations)
+	if err != nil {
+		return fmt.Errorf("promote: %w", err)
+	}
+	log.Printf("sync camara-votes %d: %+v", year, stats)
+	return nil
+}
+
+// syncCamaraAttendance re-ingests the year's presence file and promotes
+// presences on the plenary sessions the votes sync landed.
+func syncCamaraAttendance(ctx context.Context, db *sql.DB, client *camara.Client, year int) error {
+	rows, err := client.FetchPresence(ctx, year)
+	if err != nil {
+		return fmt.Errorf("fetch presenca %d: %w", year, err)
+	}
+	stats, err := sync.SyncCamaraAttendance(ctx, db,
+		sync.SourceCamaraPresencaYear+fmt.Sprint(year), year, rows)
+	if err != nil {
+		return fmt.Errorf("promote: %w", err)
+	}
+	log.Printf("sync camara-attendance %d: %+v", year, stats)
+	return nil
+}
+
+// syncSenadoVotes re-ingests the year's nominal votes (full roster — the
+// per-senator codes double as the presence record) and the party leadership
+// orientations (fetched in 60-day windows, the endpoint's max range).
+func syncSenadoVotes(ctx context.Context, db *sql.DB, client *senado.Client, year int) error {
+	votes, err := client.FetchNominalVotes(ctx, year)
+	if err != nil {
+		return fmt.Errorf("fetch nominal votes %d: %w", year, err)
+	}
+	orientations, err := client.FetchVoteOrientations(ctx, year)
+	if err != nil {
+		return fmt.Errorf("fetch orientacoes %d: %w", year, err)
+	}
+	stats, err := sync.SyncSenadoVotes(ctx, db, sync.SourceSenadoVotacoesYear, year, votes, orientations)
+	if err != nil {
+		return fmt.Errorf("promote: %w", err)
+	}
+	log.Printf("sync senado-votes %d: %+v", year, stats)
 	return nil
 }

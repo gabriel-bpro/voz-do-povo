@@ -43,7 +43,7 @@ type Expense struct {
 	IssuedAt       string // ISO date (YYYY-MM-DD); empty when unparsable
 	Year           int
 	Month          int
-	Installment    int    // parcela: != 0 when reimbursed in installments
+	Installment    int // parcela: != 0 when reimbursed in installments
 	AmountDocument float64
 	AmountGlosa    float64
 	AmountNet      float64 // valorLiquido; may be negative (glosa/ressarcimento)
