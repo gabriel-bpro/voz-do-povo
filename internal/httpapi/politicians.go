@@ -137,6 +137,7 @@ func (s *server) handleProfile(w http.ResponseWriter, r *http.Request) {
 		"sources":  []sourceMeta{s.registrySource(ctx, registryKey)},
 		"expenses": s.expenseSection(ctx, id, year, house),
 		"emendas":  s.emendaSection(ctx, id, year),
+		"votes":    s.votesSection(ctx, id, house),
 	})
 }
 

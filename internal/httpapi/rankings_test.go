@@ -28,7 +28,7 @@ type rankingsBody struct {
 	} `json:"topSpenders"`
 	Biggest []struct {
 		Politician struct {
-			ID                int64 `json:"id"`
+			ID                int64  `json:"id"`
 			ParliamentaryName string `json:"parliamentaryName"`
 		} `json:"politician"`
 		Category  string  `json:"category"`
