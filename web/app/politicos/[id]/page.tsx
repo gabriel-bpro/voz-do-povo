@@ -9,12 +9,14 @@ import {
   getProfile,
   type ProfileResponse,
   type EmendasLinked,
+  type VotesLinked,
 } from "@/lib/api";
 import { SourceLine } from "@/components/SourceLine";
 import {
   brl,
   brlCents,
   salariosMinimosAnchor,
+  formatSyncDate,
   MONTHS_SHORT,
 } from "@/lib/format";
 
@@ -46,7 +48,7 @@ export default async function ProfilePage({
 }
 
 function Profile({ profile }: { profile: ProfileResponse }) {
-  const { politician: p, summary, sources, expenses, emendas } = profile;
+  const { politician: p, summary, sources, expenses, emendas, votes } = profile;
   // Data-only sub-line: the templated sentence (cargo, mandato) is the API's
   // summary — one template, one owner.
   const subtitle = p.party && p.uf ? `${p.party}–${p.uf}` : (p.party ?? p.uf);
@@ -124,6 +126,30 @@ function Profile({ profile }: { profile: ProfileResponse }) {
           </div>
         ) : (
           <Emendas emendas={emendas} />
+        )}
+      </section>
+
+      <section className="card" id="votos">
+        <div className="card-header">
+          <h2>
+            Votos e presença ·{" "}
+            <span
+              className="tooltip"
+              title="Votação nominal: o voto de cada parlamentar fica registrado nominalmente — dá para saber quem votou o quê. Em votação simbólica não há registro individual."
+            >
+              votação nominal
+            </span>
+          </h2>
+          <SourceLine source={votes.source} />
+        </div>
+
+        {!votes.linked ? (
+          <div className="not-linked">
+            <strong>Dados não ligados.</strong>
+            <p>{votes.message}</p>
+          </div>
+        ) : (
+          <Votes votes={votes} />
         )}
       </section>
     </>
@@ -325,6 +351,81 @@ function Emendas({ emendas }: { emendas: EmendasLinked }) {
         <strong>PIX</strong> = sem objeto específico, a mais difícil de
         rastrear.
       </p>
+    </>
+  );
+}
+
+// Votes & attendance section (issue 19), locked prototype style: big-number
+// attendance rate for the current legislature, the party-alignment sentence,
+// and the ~20 most recent nominal votes with the party-orientation
+// comparison. Divergence is neutral text — not a warning badge.
+function Votes({ votes }: { votes: VotesLinked }) {
+  const { attendance, alignment } = votes;
+  const pct = Math.round(attendance.rate * 100);
+
+  return (
+    <>
+      <div className="big-number">{pct}%</div>
+      <p className="sub-line">
+        de presença em {attendance.sessions}{" "}
+        {attendance.sessions === 1 ? "sessão com votação" : "sessões com votação"}{" "}
+        nesta legislatura ({votes.legislature})
+        {attendance.justified != null && attendance.justified > 0 && (
+          <> · {attendance.justified} em licença ou missão oficial</>
+        )}
+      </p>
+      {alignment && (
+        <p className="sub-line">
+          seguiu a orientação do partido em {alignment.aligned} de{" "}
+          {alignment.comparable}{" "}
+          {alignment.comparable === 1 ? "voto comparável" : "votos comparáveis"}
+        </p>
+      )}
+
+      <div className="explainer">
+        Presença conta sessões de plenário com votação nominal. A orientação
+        do partido é a posição que a liderança indica antes da votação;
+        &quot;liberado&quot; significa que o partido não cobrou posição. Na Câmara a
+        fonte registra só presenças; no Senado, licenças e missões oficiais
+        aparecem à parte.
+      </div>
+
+      {votes.items.length > 0 && (
+        <table className="data">
+          <thead>
+            <tr>
+              <th>Votações mais recentes</th>
+              <th style={{ textAlign: "right" }}>Voto</th>
+            </tr>
+          </thead>
+          <tbody>
+            {votes.items.map((it, i) => (
+              <tr key={i}>
+                <td>
+                  {it.description}
+                  <div className="item-sub">
+                    {[it.matterRef, formatSyncDate(it.date)]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </div>
+                </td>
+                <td className="num">
+                  <strong>{it.vote}</strong>
+                  <div className="item-sub">
+                    {it.aligned === true && "com o partido"}
+                    {it.aligned === false &&
+                      `contra o partido${it.partySigla ? ` (${it.partySigla})` : ""}`}
+                    {it.aligned === null &&
+                      (it.partyOrientation === "Liberado"
+                        ? "partido liberou"
+                        : "sem orientação registrada")}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </>
   );
 }

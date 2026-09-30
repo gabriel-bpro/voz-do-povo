@@ -1,0 +1,34 @@
+[
+  {
+    "VoteID": "2585316-100",
+    "VotedAt": "2026-02-24T14:46:15",
+    "DeputyID": 204001,
+    "PartySigla": "PT",
+    "UF": "SP",
+    "Vote": "Sim"
+  },
+  {
+    "VoteID": "2585316-100",
+    "VotedAt": "2026-02-24T14:46:15",
+    "DeputyID": 204002,
+    "PartySigla": "PL",
+    "UF": "RJ",
+    "Vote": "Não"
+  },
+  {
+    "VoteID": "2585316-100",
+    "VotedAt": "2026-02-24T14:46:15",
+    "DeputyID": 999999,
+    "PartySigla": "XX",
+    "UF": "AC",
+    "Vote": "Sim"
+  },
+  {
+    "VoteID": "2585316-101",
+    "VotedAt": "2026-03-03T15:00:00",
+    "DeputyID": 204001,
+    "PartySigla": "PT",
+    "UF": "SP",
+    "Vote": "Abstenção"
+  }
+]
