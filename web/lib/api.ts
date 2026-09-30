@@ -72,6 +72,52 @@ export interface ProfileResponse {
   sources: SourceMeta[];
   expenses: ExpensesLinked | ExpensesUnlinked;
   emendas: EmendasLinked | EmendasUnlinked;
+  votes: VotesLinked | VotesUnlinked;
+}
+
+// --- profile votes & attendance section (issue 19) ---
+
+export interface VoteItem {
+  date: string;
+  description: string;
+  matterRef: string | null;
+  vote: string;
+  partySigla: string | null;
+  partyOrientation: string | null;
+  // Three-state: null when the party freed the vote, none was recorded, or
+  // the position is not comparable.
+  aligned: boolean | null;
+}
+
+export interface VotesAttendance {
+  sessions: number;
+  present: number;
+  // Justified absences (licenças, missões) — only the Senado source carries
+  // them; null for the Câmara.
+  justified: number | null;
+  rate: number;
+}
+
+export interface VotesAlignment {
+  comparable: number;
+  aligned: number;
+  rate: number;
+}
+
+export interface VotesLinked {
+  linked: true;
+  legislature: string;
+  attendance: VotesAttendance;
+  // null when no vote has a comparable party orientation.
+  alignment: VotesAlignment | null;
+  items: VoteItem[];
+  source: SourceMeta;
+}
+
+export interface VotesUnlinked {
+  linked: false;
+  message: string;
+  source: SourceMeta;
 }
 
 // --- profile emendas section (issue 17) ---

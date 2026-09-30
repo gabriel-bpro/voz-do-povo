@@ -14,14 +14,6 @@ import (
 // Seam 2 (ticket 19): recorded vote/attendance fixtures → sync entry points
 // → assert raw + curated table state.
 
-func syncSenatorsFixture(t *testing.T, db *sql.DB) {
-	t.Helper()
-	senators := loadFixture[[]senado.Senator](t, "senado-senators.json")
-	if err := sync.SyncSenadoSenators(context.Background(), db, senators); err != nil {
-		t.Fatalf("SyncSenadoSenators: %v", err)
-	}
-}
-
 func syncCamaraVotesFixture(t *testing.T, db *sql.DB) sync.VoteSyncStats {
 	t.Helper()
 	events := loadFixture[[]camara.VoteEvent](t, "camara-votacoes.json")
@@ -227,7 +219,7 @@ func TestSyncSenadoVotes(t *testing.T) {
 	}
 	want := map[string]att{
 		"550469|9001": {"present", "Sim"},  // Sim beats P-NRV across the session
-		"550469|9002": {"present", "Sim"},  // Sim beats Não (both present)
+		"550469|9002": {"present", "Não"},  // first present code of the session
 		"550469|9003": {"justified", "AP"}, // unlinked senator still gets a row
 		"550470|9001": {"justified", "AP"},
 		"550470|9002": {"present", "Votou"}, // secret vote = present
