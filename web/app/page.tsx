@@ -33,7 +33,7 @@ export default async function Home({
         </h1>
         <p className="explainer-line">
           Dados públicos sobre os políticos que você elegeu, explicados em
-          linguagem simples.
+          linguagem acessível.
         </p>
       </header>
 
