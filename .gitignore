@@ -1,4 +1,4 @@
 node_modules/
 .next/
 .env
-.hosting_provider/node_modules/
+.scratch/

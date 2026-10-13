@@ -4,18 +4,16 @@ A web app to help people understand, investigate, and do diligence on the politi
 
 ## Layout
 
-- `cmd/api`, `cmd/worker` — Go services (API serves the curated layer; worker is a one-shot sync run fired weekly by hosting provider cron, not an always-up service)
+- `cmd/api`, `cmd/worker` — Go services (API serves the curated layer; worker is a one-shot sync run, not an always-up service)
 - `internal/` — `store` (Postgres + embedded migrations in `internal/store/migrations/`), `httpapi`, `sync` (raw landing + promotion to curated, identity linkage), `camara` (Câmara source adapter: fetch + parse only, no DB), `testharness`
 - `web/` — Next.js app (App Router); note `web/AGENTS.md` (Next-version-specific rules)
-- `.hosting_provider/hosting_provider.ts` — hosting provider infrastructure as code (4 units: web, api, worker, Postgres); change via `hosting_provider config plan` / `apply`
 
 ## Commands
 
 - Go: `go build ./...`, `go vet ./...`, `go test ./...`
 - Web: `cd web && npm run lint`, `npm run build`
-- Deploy: push to `main` auto-deploys only changed services (path filters in `.github/workflows/ci.yml`, needs `HOSTING_PROVIDER_TOKEN` secret); manual: `scripts/deploy.sh api|worker|web|all` (wraps `hosting_provider up` — api/worker build from the repo-root Dockerfile; web deploys `./web --path-as-root`). `.hosting_provider/hosting_provider.ts` infra changes stay manual (`hosting_provider config plan`/`apply`)
 
-## Tests — two agreed seams (see `.scratch/voz-do-povo-mvp/spec.md`)
+## Tests — two agreed seams
 
 1. **HTTP API seam** — drive the API over HTTP against a real Postgres seeded at the curated layer (`testharness.API`).
 2. **Sync seam** — feed recorded source fixtures into sync entry points, assert raw + curated table state (`testharness.TestDB` + `testharness.Fixture`).
@@ -26,7 +24,7 @@ Both spin a throwaway Postgres via Docker — tests require a running Docker dae
 
 ### Issue tracker
 
-Issues live as local markdown files under `.scratch/<feature-slug>/`. See `docs/agents/issue-tracker.md`.
+Issues live as local markdown files under `.scratch/<feature-slug>/` (git-ignored, local-only). See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

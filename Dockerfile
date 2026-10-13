@@ -1,5 +1,5 @@
 # Builds both Go binaries; each service picks its own via the start command
-# (api: /bin/api, worker: /bin/worker) defined in .hosting_provider/hosting_provider.ts.
+# (api: /bin/api, worker: /bin/worker).
 
 FROM golang:1.25-bookworm AS build
 WORKDIR /src

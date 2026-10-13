@@ -1,6 +1,5 @@
 // Server-side API access: the web app only ever reads the curated layer
-// through the Go API. hosting provider wires API_HOST/API_PORT to the api service's
-// private domain (see .hosting_provider/hosting_provider.ts).
+// through the Go API. API_HOST/API_PORT point at the api service.
 
 export function apiURL(): string {
   const host = process.env.API_HOST ?? "localhost";

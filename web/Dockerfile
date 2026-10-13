@@ -1,4 +1,4 @@
-# Next.js standalone build; deployed on its own via `hosting_provider up` from web/.
+# Next.js standalone build.
 
 FROM node:24-bookworm-slim AS build
 WORKDIR /app

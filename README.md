@@ -16,7 +16,6 @@ The app maintains its own **mirror** of government open data, synced per source 
 | `internal/camara` | Câmara dos Deputados source adapter (fetch + parse only, no DB) |
 | `internal/testharness` | Test fixtures and throwaway-Postgres helpers |
 | `web/` | Next.js app (App Router) — see `web/AGENTS.md` |
-| `.hosting_provider/hosting_provider.ts` | hosting provider infrastructure as code (4 units: web, api, worker, Postgres) |
 
 ## Prerequisites
 
@@ -38,26 +37,28 @@ npm run lint
 npm run build
 ```
 
-Configuration via `.env` (e.g. `GCP_SERVICE_ACCOUNT_JSON`, database connection settings).
+Configuration via `.env` — see `.env.example`.
 
 ## Tests
 
-Two agreed seams (see `.scratch/voz-do-povo-mvp/spec.md`):
+Two agreed seams:
 
 1. **HTTP API seam** — drive the API over HTTP against a real Postgres seeded at the curated layer (`testharness.API`).
 2. **Sync seam** — feed recorded source fixtures into sync entry points, assert raw + curated table state (`testharness.TestDB` + `testharness.Fixture`).
 
 Both spin a throwaway Postgres via Docker. The frontend has no test layer (type-check + lint only).
 
-## Deploy
+## Running locally
 
 ```bash
-hosting_provider up --service api --detach        # from repo root
-hosting_provider up --service worker --detach     # from repo root
-hosting_provider up ./web --path-as-root --service web --detach
+docker compose up
 ```
 
-Infrastructure changes go through `hosting_provider config plan` / `hosting_provider config apply` (`.hosting_provider/hosting_provider.ts`).
+Brings up Postgres, the API, the worker, and the web app. Configuration via `.env` — see `.env.example`.
+
+## Deploy
+
+Provider-agnostic: the repo-root `Dockerfile` builds both Go binaries (`/bin/api`, `/bin/worker`) and `web/Dockerfile` builds the Next.js standalone server. Deploy the three services plus a Postgres instance on any container platform, wiring the environment variables from `.env.example`.
 
 ## Domain docs
 
