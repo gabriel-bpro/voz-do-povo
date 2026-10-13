@@ -1,5 +1,5 @@
-// Worker service: one-shot run of the mirror's syncs, fired weekly by a
-// hosting provider cron schedule. Sync failures are logs only for the app — it
+// Worker service: one-shot run of the mirror's syncs, fired weekly by an
+// external cron schedule. Sync failures are logs only for the app — it
 // always renders the last good sync — but a failed sync exits non-zero so
 // the cron run shows as failed.
 package main
@@ -114,8 +114,8 @@ func main() {
 	// working CEAP source (the API's despesas endpoint returns empty for
 	// every deputy — verified 2026-09-08), so the current-year bulk re-ingest
 	// doubles as the delta. CEAPS likewise: the year dataset is updated
-	// daily upstream. hosting provider fires this process on a weekly cron schedule
-	// (Monday 06:00 UTC); each run executes every sync once and exits.
+	// daily upstream. An external cron fires this process on a weekly
+	// schedule (Monday 06:00 UTC); each run executes every sync once and exits.
 	jobs := []job{
 		{"camara-registry", func(ctx context.Context) error {
 			return syncCamaraRegistry(ctx, db, client)
