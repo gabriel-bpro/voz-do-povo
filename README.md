@@ -1,35 +1,35 @@
 # voz-do-povo
 
-A web app to help people understand, investigate, and do diligence on the politicians they elected — built on Brazilian government open data, explained in plain language (pt-BR product, English codebase).
+Um app web para ajudar cidadãos a entender, investigar e fazer due diligence dos políticos que elegeram — construído sobre dados abertos do governo brasileiro, explicados em linguagem simples (produto em pt-BR, código em inglês).
 
-The app maintains its own **mirror** of government open data, synced per source cadence; it never calls government APIs at request time. Data lands in a **raw layer** (staging, verbatim, with provenance) and is promoted to a **curated layer** — the only schema the app queries.
+O app mantém seu próprio **espelho** dos dados abertos do governo, sincronizado conforme a cadência de cada fonte; nunca chama APIs do governo em tempo de requisição. Os dados chegam em uma **camada raw** (staging, verbatim, com proveniência) e são promovidos para uma **camada curada** — o único schema que o app consulta.
 
-## Repository layout
+## Estrutura do repositório
 
-| Path | Description |
+| Caminho | Descrição |
 |---|---|
-| `cmd/api` | API service — serves the curated layer over HTTP |
-| `cmd/worker` | Worker service — runs the data syncs |
-| `internal/store` | Postgres access + embedded migrations (`internal/store/migrations/`) |
-| `internal/httpapi` | HTTP handlers |
-| `internal/sync` | Raw landing + promotion to curated, identity linkage |
-| `internal/camara` | Câmara dos Deputados source adapter (fetch + parse only, no DB) |
-| `internal/testharness` | Test fixtures and throwaway-Postgres helpers |
-| `web/` | Next.js app (App Router) — see `web/AGENTS.md` |
+| `cmd/api` | Serviço de API — serve a camada curada via HTTP |
+| `cmd/worker` | Serviço worker — executa as sincronizações de dados |
+| `internal/store` | Acesso ao Postgres + migrations embutidas (`internal/store/migrations/`) |
+| `internal/httpapi` | Handlers HTTP |
+| `internal/sync` | Desembarque no raw + promoção para o curado, linkage de identidade |
+| `internal/camara` | Adaptador da fonte Câmara dos Deputados (só fetch + parse, sem DB) |
+| `internal/testharness` | Fixtures de teste e helpers de Postgres descartável |
+| `web/` | App Next.js (App Router) — veja `web/AGENTS.md` |
 
-## Prerequisites
+## Pré-requisitos
 
 - Go 1.25+
 - Node.js + npm
-- Docker (required for tests — both test seams spin up a throwaway Postgres)
+- Docker (obrigatório para os testes — ambas as frentes de teste sobem um Postgres descartável)
 
-## Development
+## Desenvolvimento
 
 ```bash
-# Go services
+# Serviços Go
 go build ./...
 go vet ./...
-go test ./...        # requires a running Docker daemon
+go test ./...        # requer o daemon do Docker rodando
 
 # Web
 cd web && npm install
@@ -37,31 +37,31 @@ npm run lint
 npm run build
 ```
 
-Configuration via `.env` — see `.env.example`.
+Configuração via `.env` — veja `.env.example`.
 
-## Tests
+## Testes
 
-Two agreed seams:
+Duas frentes acordadas:
 
-1. **HTTP API seam** — drive the API over HTTP against a real Postgres seeded at the curated layer (`testharness.API`).
-2. **Sync seam** — feed recorded source fixtures into sync entry points, assert raw + curated table state (`testharness.TestDB` + `testharness.Fixture`).
+1. **Frente da API HTTP** — exercita a API via HTTP contra um Postgres real semeado na camada curada (`testharness.API`).
+2. **Frente de sync** — alimenta fixtures de fonte gravadas nos pontos de entrada do sync, e verifica o estado das tabelas raw + curadas (`testharness.TestDB` + `testharness.Fixture`).
 
-Both spin a throwaway Postgres via Docker. The frontend has no test layer (type-check + lint only).
+Ambas sobem um Postgres descartável via Docker. O frontend não tem camada de testes (só type-check + lint).
 
-## Running locally
+## Rodando localmente
 
 ```bash
 docker compose up
 ```
 
-Brings up Postgres, the API, the worker, and the web app. Configuration via `.env` — see `.env.example`.
+Sobe Postgres, a API, o worker e o app web. Configuração via `.env` — veja `.env.example`.
 
 ## Deploy
 
-Provider-agnostic: the repo-root `Dockerfile` builds both Go binaries (`/bin/api`, `/bin/worker`) and `web/Dockerfile` builds the Next.js standalone server. Deploy the three services plus a Postgres instance on any container platform, wiring the environment variables from `.env.example`.
+Independente de provedor: o `Dockerfile` da raiz gera os dois binários Go (`/bin/api`, `/bin/worker`) e `web/Dockerfile` gera o servidor standalone do Next.js. Faça deploy dos três serviços mais uma instância Postgres em qualquer plataforma de containers, configurando as variáveis de ambiente do `.env.example`.
 
-## Domain docs
+## Documentação de domínio
 
-- `CONTEXT.md` — glossary and domain language
-- `docs/adr/` — architectural decisions
-- `AGENTS.md` — agent-oriented project guide
+- `CONTEXT.md` — glossário e linguagem do domínio
+- `docs/adr/` — decisões arquiteturais
+- `AGENTS.md` — guia do projeto orientado a agentes
