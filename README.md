@@ -63,5 +63,4 @@ Independente de provedor: o `Dockerfile` da raiz gera os dois binários Go (`/bi
 ## Documentação de domínio
 
 - `CONTEXT.md` — glossário e linguagem do domínio
-- `docs/adr/` — decisões arquiteturais
 - `AGENTS.md` — guia do projeto orientado a agentes
